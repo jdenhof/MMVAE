@@ -1,8 +1,19 @@
-import os
-import time
-import torch
-from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
+from utils import assert_field_exists
+from torch.utils.data import DataLoader
+import torch
+import time
+import os
+
+_req = [
+    '_epochs_run',
+    '_local_rank',
+    '_global_rank',
+    '_loader',
+    '_optimizer',
+    '_save_every', 
+    '_snapshot_path',
+]
 
 class Trainer:
     def __init__(
@@ -15,16 +26,23 @@ class Trainer:
     ) -> None:
         
         self._initialize(model, loader, optimizer, save_every, snapshot_path)
-        self.local_rank, self.global_rank = int(os.environ["LOCAL_RANK"]), int(os.environ["RANK"])
+
+        def _set_rank(rank: int):
+            return rank if rank is not None else -1
+        
+        self._local_rank = _set_rank(int(os.environ["LOCAL_RANK"]))
+        self._global_rank = _set_rank(int(os.environ["RANK"]))
 
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        self.model = DDP(model.to(self.local_rank), device_ids=[self.local_rank])
+        self.model = DDP(model.to(self._local_rank), device_ids=[self._local_rank])
+
+        [assert_field_exists(self, field) for field in _req]
 
     def train(self, max_epochs: int):
-        for epoch in range(self.epochs_run, max_epochs):
+        for epoch in range(self._epochs_run, max_epochs):
             epoch_time = time.time()
             self._run_epoch(epoch)
             print(f"Epoch ran in: {time.time() - epoch_time}")
@@ -32,25 +50,25 @@ class Trainer:
                 self._save_snapshot(epoch)
 
     def _run_epoch(self, epoch):
-        print(f"[GPU{self.global_rank}] Epoch {epoch}")
+        print(f"[GPU{self._global_rank}] Epoch {epoch}")
         for source in self._loader:
-            source = source.to(self.local_rank)
+            source = source.to(self._local_rank)
             self._run_batch(source)
 
     def _run_batch(self, source):
         self._optimizer.zero_grad()
         output, mean, logvar = self.model(source)
         recon_loss = torch.nn.CrossEntropyLoss()(output, source.to_dense())
-        KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-        loss = recon_loss + KLD
+        kld = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+        loss = recon_loss + kld
         loss.backward()
         self._optimizer.step()
     
     def _load_snapshot(self, snapshot_path):
         snapshot = torch.load(snapshot_path)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
-        self.epochs_run = snapshot["EPOCHS_RUN"]
-        print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
+        self._epochs_run = snapshot["EPOCHS_RUN"]
+        print(f"Resuming training from snapshot at Epoch {self._epochs_run}")
 
     def _save_snapshot(self, epoch):
         snapshot = {}
@@ -81,4 +99,13 @@ class Trainer:
             raise TypeError("The 'snapshot_path' must be a string.")
         
         self._loader, self._optimizer, self._save_every, self._snapshot_path = loader, optimizer, save_every, snapshot_path
-        self.epochs_run = 0
+        self._epochs_run = 0
+
+    _epochs_run: int
+    _local_rank: int
+    _global_rank: int
+    _loader: DataLoader
+    _optimizer: torch.optim.Optimizer
+    _save_every: int
+    _snapshot_path: int
+    
