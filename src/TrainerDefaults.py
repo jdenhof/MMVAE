@@ -1,0 +1,10 @@
+CHUNK_BUFFER_SIZE=5
+CHUNK_DIRECTORY='/active/debruinz_project/tony_boos/csr_chunks/'
+SAVE_EVERY=5
+SNAPSHOT_PATH='./snapshots'
+CHUNK_SIZE=285341
+SEED=123456
+NUM_SAMPLES=10
+SAMPLE_SIZE=CHUNK_SIZE * NUM_SAMPLES
+NUM_WORKERS = 2
+MODEL_PATH='/home/denhofja/D-MMVAE/src/Models.py'

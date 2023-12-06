@@ -50,60 +50,7 @@ class VAE(nn.Module):
         x_hat = self.Decoder(z)
         return x_hat, mean, logvar
 
+class Model(VAE):
+    def __init__(self):
+        super().__init__(Encoder(60664, 512, 128), Decoder(128, 512, 60664))
 
-
-"""
-def loss_function(x, x_hat, mean, logvar):
-    #reconstruction_loss = nn.functional.binary_cross_entropy(x_hat, x.to_dense(), reduction='sum')
-    #reconstruction_loss = nn.functional.mse_loss(x_hat, x.to_dense())
-    reconstruction_loss = nn.functional.cross_entropy(x_hat, x.to_dense(), reduction='sum')
-    KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-    return reconstruction_loss + KLD
-
-
-
-def collate_fn(batch):
-    #Custom collate function to return a list of tensors as a batch rather than one big tensor
-    return batch
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")  
-print(DEVICE)
-BATCH_SIZE = 100
-dataset = CellxGeneDataset(BATCH_SIZE)
-#dataloader = DataLoader(dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
-print("Building Encoder...")
-encode = Encoder(60664, 512, 128)
-print("Success!\nBuilding Decoder...")
-decode = Decoder(128, 512, 60664)
-print("Success!\nBuilding model...")
-
-test = VAE(encode, decode).to(DEVICE)
-print("Success!")
-optimizer = Adam(test.parameters())
-#print("Wrapping for multi-GPU")
-#test = torch.nn.DataParallel(test, device_ids=[0,1])
-#test.to(DEVICE)
-#print("Scucess!")
-test.train()
-for epoch in range(30):
-    epoch_time = time.time()
-    total_loss = 0
-    for batch_idx, x in enumerate(dataset):
-        train_loss = 0
-        # print(f'Batch: {batch_idx}, Epoch: {epoch}')
-        optimizer.zero_grad()
-        x = x.to(DEVICE)
-        # x = x.transpose(0, 1)
-
-        x_hat, mean, log_var = test(x)
-        loss = loss_function(x, x_hat, mean, log_var)
-        
-        train_loss += loss.item()
-        total_loss += train_loss
-        
-        loss.backward()
-        optimizer.step()
-        #print("Batch", batch_idx+1, "Loss:", train_loss / x.shape[0])
-    print("Time to run:", time.time() - epoch_time)
-    print("Epoch", epoch + 1, "complete!", "Average Loss: ", train_loss / (batch_idx*BATCH_SIZE))
-"""
