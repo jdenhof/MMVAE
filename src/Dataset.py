@@ -63,7 +63,7 @@ class ThreadedChunkDataset(IterableDataset):
             phase = ''
 
         # TODO: Add error handeling
-        self._chunk_paths = [os.path.join(directory, path) for path in os.listdir(directory) if '.npz' in path and phase in path]
+        self._chunk_paths = [os.path.join(directory, path) for path in os.listdir(directory) if 'chunk' in path and '.npz' in path and phase in path]
         if len(self._chunk_paths) == 0:
             raise FileNotFoundError(f"No chunks found at {directory}\nTain Example file:\nchunk_1_train.npz\nTest Example File:\ntest_chunk_1.npz")
         

@@ -46,7 +46,7 @@ class Trainer:
             epoch_time = time.time()
             self._run_epoch(epoch)
             print(f"Epoch ran in: {time.time() - epoch_time}")
-            if self.local_rank == 0 and epoch % self._save_every == 0:
+            if self._local_rank == 0 and epoch % self._save_every == 0:
                 self._save_snapshot(epoch)
 
     def _run_epoch(self, epoch):

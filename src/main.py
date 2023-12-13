@@ -146,6 +146,7 @@ def main(args: _Args):
         train_set,
         worker_init_fn=worker_init_fn,
         num_workers=args.num_workers,
+        batch_size=None,
         shuffle=False,
         pin_memory=True, # pin_memory_device not set so default is cpu 
         prefetch_factor=2,
