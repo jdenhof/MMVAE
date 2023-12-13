@@ -2,21 +2,24 @@
 import os
 import sys
 from dataclasses import dataclass
-
-DEBUG = True
+from time import sleep
+from utils import print, DEBUG
+import sys
+import traceback
 
 @dataclass
 class _Args:
     model_path: str
     total_epochs: int
     batch_size: int
-    num_workers: int
     seed: int
     sample_size: int
     chunk_buffer_size: int
     chunks_directory: str
     save_every: int
     snapshot_path: str
+    num_workers: int
+    world_size: int
 
 def parse_args():
     import argparse
@@ -39,10 +42,9 @@ def parse_args():
         help="Path to model to use for training (Note: class name must be Model)"
     )
     parser.add_argument(
-        '--num_workers', 
-        type=int, 
-        help='Number of workers per gpu', 
-        default=TrainerDefaults.NUM_WORKERS
+        f"{'--' if DEBUG else ''}world_size",
+        type=int,
+        help="Number of available devices" # Necessary as torch.cuda.device_count() always returns 2 as we have 2 gpus per gpu node
     )
     parser.add_argument(
         '--seed', 
@@ -69,6 +71,12 @@ def parse_args():
         default=TrainerDefaults.CHUNK_DIRECTORY
     )
     parser.add_argument(
+        '--num_workers', 
+        type=str,
+        help='Number of process for data loading', 
+        default=TrainerDefaults.NUM_WORKERS
+    )
+    parser.add_argument(
         '--save_every', 
         type=int, 
         help='How often to save a snapshot', 
@@ -84,6 +92,7 @@ def parse_args():
     args = parser.parse_args(namespace=_Args)
     if DEBUG:
         args.model_path = TrainerDefaults.MODEL_PATH
+        args.world_size = 1
 
     return args
 
@@ -118,46 +127,51 @@ def _get_model_instance_from_file(file_path: str):
     return model
 
 def main(args: _Args):
+    sleep(10)
     import torch
-    from torch.distributed import init_process_group, destroy_process_group
-    init_process_group(backend="nccl") # DDP Setup
 
     if not torch.cuda.is_available():
-        devices = "cpu"
+        devices = ["cpu"]
     else:
-        devices = [f"cuda:{i}" for i in range(torch.cuda.device_count())]
-    assert(devices is not None and devices == "cpu" or len(devices) > 0)
-    print(f"Main running with device(s): {devices}")
+        devices = [f"cuda:{i}" for i in range(args.world_size)]
+    
+    if len(devices) > 1:
+        raise NotImplementedError("Multiple devices currently not supported")
+    device = devices[0]
+    print(f"Main running with device(s): {device}")
 
-    from Dataset import ThreadedChunkDataset, worker_init_fn
+    from Dataset import ThreadedChunkDataset
     train_set = ThreadedChunkDataset(
         batch_size=args.batch_size, 
-        chunk_directory=args.chunks_directory, 
-        buffer_size=args.chunk_buffer_size, 
-        sample_size=args.sample_size,
-        seed=args.seed)
+        device = device,
+        sample_size=args.sample_size)
     
     model = _get_model_instance_from_file(args.model_path)
     
-    optimizer = torch.optim.Adam(model.parameters()) # TODO: Use distributed optimizer
-
-    from torch.utils.data import DataLoader
-    train_data = DataLoader(
-        train_set,
-        worker_init_fn=worker_init_fn,
-        num_workers=args.num_workers,
-        shuffle=False,
-        pin_memory=True, # pin_memory_device not set so default is cpu 
-        prefetch_factor=2,
-        persistent_workers=True,
-    )
+    optimizer = torch.optim.Adam(model.parameters()) 
 
     from Trainer import Trainer
-    trainer = Trainer(model, train_data, optimizer, args.save_every, args.snapshot_path)
-    trainer.train(args.total_epochs)
+    trainer = Trainer(model, device, train_set, optimizer, args.save_every, args.snapshot_path)
 
-    destroy_process_group()
+    from Phase import Phase
+    from UltraChunkLoader import ChunkLoader
+    with ChunkLoader(
+        epoch=trainer.epoch,
+        max_epochs=args.total_epochs,
+        num_workers=args.num_workers,
+        buffer_size=args.chunk_buffer_size,
+        directory=args.chunks_directory,
+        phase=Phase.train
+    ) as loader:
+        print("Entered loader context")
+        trainer.dataset.loader = loader
+        trainer.train(args.total_epochs)
+            
+    print("Master process: ChunkLoader process has been terminated")
+   
 
 if __name__ == "__main__":
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     args = parse_args()
     main(args)

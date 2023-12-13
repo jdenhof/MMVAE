@@ -1,0 +1,5 @@
+scipy==1.11.4
+numpy==1.26.2
+torch==2.2.0dev20231208+cu121 
+
+# pip install requirements.txt --find-links https://download.pytorch.org/whl/nightly/cu121
