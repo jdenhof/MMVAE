@@ -20,9 +20,7 @@ _req = (
     'epoch',
 )
 
-class Trainer:
-
-    __initialized = False
+class CellxGeneTrainer:
 
     def __init__(
         self,
@@ -34,15 +32,15 @@ class Trainer:
         snapshot_path: str
     ) -> None:
         
-        self._initialize(model, dataset, optimizer, save_every, snapshot_path, device)
+        self._initialize_fields(model, dataset, optimizer, save_every, snapshot_path, device)
 
-        self.model = model.to(self._device)
+        self.model = model.to(device)
 
+        # TODO: GUUID TO NOT OVERRIDE BASE 
         if not DEBUG and os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
         
-        self.mse_loss_time = 0
         assert_fields_exists(self, *_req)
         self.__initialized = True
 
@@ -69,10 +67,9 @@ class Trainer:
     def _run_epoch(self, epoch :int):
         print(f"[{self._device}] Epoch {epoch}")
         self.total_loss = 0
-        for i, source in enumerate(iter(self.dataset)):
+        for source in iter(self.dataset):
             # source = source.to(self.device) - No Longer needed as created on device
             self._run_batch(source)
-        print(f"MSELoss time: {self.mse_loss_time / (epoch + 1):.5f}")
         print(f"Average Loss: {self.total_loss / (epoch + 1):4f}")
 
     def _run_batch(self, source: torch.Tensor):
@@ -100,7 +97,7 @@ class Trainer:
         torch.save(snapshot, self._snapshot_path)
         print(f"Epoch {epoch} | Training snapshot saved at {self._snapshot_path}")
 
-    def _initialize(self, model: torch.nn.Module, dataset: ThreadedChunkDataset, optimizer: torch.optim.Optimizer, save_every: int, snapshot_path: str, device: str):
+    def _initialize_fields(self, model: torch.nn.Module, dataset: ThreadedChunkDataset, optimizer: torch.optim.Optimizer, save_every: int, snapshot_path: str, device: str):
 
         isinstance_error(model, torch.nn.Module)
         isinstance_error(dataset, ThreadedChunkDataset)
@@ -110,6 +107,8 @@ class Trainer:
         if save_every <= 0:
             raise ValueError("The 'save_every' must be a positive integer.")
         
-        self.dataset, self._optimizer, self._save_every, self._snapshot_path, self._device = dataset, optimizer, save_every, snapshot_path, device
+        self.dataset, self.optimizer, self._save_every, self._snapshot_path, self.device = dataset, optimizer, save_every, snapshot_path, device
         self.epoch = 0
+
+    __initialized = False
     

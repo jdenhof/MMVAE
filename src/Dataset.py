@@ -14,12 +14,12 @@ _static_req = (
     'sample_size',
 )
 
-class ThreadedChunkDataset(IterableDataset):
+class DistributedChunkDataset(IterableDataset):
 
     _initialized = False
     
     def __init__(self, batch_size: int, device: str, sample_size: int, loader: ChunkLoader = None):
-        super(ThreadedChunkDataset, self).__init__()
+        super(DistributedChunkDataset, self).__init__()
         self.device = device
         self.batch_size = batch_size
         self.sample_size = sample_size

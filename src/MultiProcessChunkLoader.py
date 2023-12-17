@@ -1,7 +1,7 @@
 
 import multiprocessing as mp
-from multiprocessing.managers import SyncManager
-from queue import Queue
+from multiprocessing.managers import BaseManager
+from queue import Empty, Queue
 from multiprocessing.synchronize import Event
 from typing import Any
 import scipy.sparse as sp
@@ -20,6 +20,11 @@ class _ChunkMananger(SyncManager):
         self.chunk_queue: Queue[sp.csr_matrix] = self.Queue(maxsize=buffer_size)
         self.completion_queue: Queue[int] = self.Queue() # must be infinite to prevent blocking workers
 
+class MyManager(BaseManager):
+    pass
+
+MyManager.register('Maths', MathsClass)
+
 Msg = collections.namedtuple('Msg', ['event', 'args'])
 class BaseProcess(mp.Process):
     """A process backed by an internal queue for simple one-way message passing.
@@ -28,14 +33,10 @@ class BaseProcess(mp.Process):
         super().__init__()
         self.queue = queue
 
-    def send(self, event, *args):
+    def send(self, event, *args, queue):
         """Puts the event and args as a `Msg` on the queue
         """
-        if event == 'quit':
-            print("Signaled process to quit")
-            msg = None
-        else:
-            msg = Msg(event, args)
+        msg = Msg(event, args)
         self.queue.put(msg)
 
     def dispatch(self, msg):
@@ -122,12 +123,15 @@ class _Distributer(_ManagedBaseProcess):
 
         print(f"Workers finished loading all chunks for epoch {epoch}", 'stager_complete')
         self.chunk_queue.put(None)
+    
+class MultiProcessChunkLoader:
 
-class _ChunkLoader:
-
-    def __init__(self, manager: _ChunkMananger, directory: str, phase: str):
-        paths = _ChunkLoader._initialize_chunk_paths(directory, phase)
-        self._distributer = _Distributer(manager, paths)
+    def __init__(self, epoch: int, max_epochs: int, num_workers: int, buffer_size: int, directory: str, phase: str):
+        self.epoch = epoch
+        self.max_epochs = max_epochs
+        self._manager = _ChunkMananger(num_workers, buffer_size)
+        paths = MultiProcessChunkLoader._initialize_chunk_paths(directory, phase)
+        self._distributer = _Distributer(self._manager, paths)
 
     def start(self, start_epoch: int, max_epochs: int):
         """Loads all epochs into epoch_queue"""
@@ -147,14 +151,6 @@ class _ChunkLoader:
         if chunk_paths is None or len(chunk_paths) == 0:
             raise FileNotFoundError(f"No chunks found at {directory}\nTain Example file:\nchunk_1_train.npz\nTest Example File:\ntest_chunk_1.npz")
         return chunk_paths
-    
-class ChunkLoader(_ChunkLoader):
-
-    def __init__(self, epoch: int, max_epochs: int, num_workers: int, buffer_size: int, directory: str, phase: str):
-        self.epoch = epoch
-        self.max_epochs = max_epochs
-        self._manager = _ChunkMananger(num_workers, buffer_size)
-        super().__init__(self._manager, directory, phase)
 
     def __enter__(self):
         self._distributer.start()
