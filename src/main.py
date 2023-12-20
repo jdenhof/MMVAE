@@ -29,10 +29,11 @@ def main(args: Args):
         num_workers=args.num_workers,
         num_chunk_workers=args.num_chunk_workers,
         buffer_size=args.chunk_buffer_size,
-        chunk_paths=_initialize_chunk_paths(args.chunks_directory)
+        chunk_paths=_initialize_chunk_paths(args.chunks_directory)[:5]
     ) as loader:
         
         optimizer = torch.optim.Adam(model.parameters()) 
+        
         from Trainer import Trainer
         trainer = Trainer(model, loader, rank, optimizer, args.save_every, args.snapshot_path)
         trainer.train(args.total_epochs)

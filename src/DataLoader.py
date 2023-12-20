@@ -41,11 +41,9 @@ class CellCensusDataLoader(DataLoader):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        print(f"Exiting Chunk Loader {exc_type is StopIteration}")
         try:
             self._chunk_loader.quit()
         except:
             self._chunk_loader._distributer.terminate()
         finally:
             self._chunk_loader._factory.manager.shutdown()
-        return exc_type is StopIteration

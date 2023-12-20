@@ -123,6 +123,7 @@ class _Distributer(_ManagedBaseProcess):
         super().terminate()
 
     def do_distribute(self, epoch: int):
+
         epoch = epoch if epoch is not None else 'not defined'
         task_count = len(self.paths)
 
@@ -131,13 +132,12 @@ class _Distributer(_ManagedBaseProcess):
 
         while task_count > 0:
             try:
-                if (self.quit_event.is_set):
+                if self.quit_event.is_set():
                     return
                 self.completion_queue.get(timeout=1)
             except queue.Empty:
                 continue
             task_count -= 1
-        print("DONE DISTRIBUTING")
         self.chunk_queue.put(None)
 
 class _Cleaner(mp.Process):

@@ -36,7 +36,7 @@ class CellCensusDataset(IterableDataset):
                 retrys += 1
                 continue
 
-            if chunk is None:
+            if chunk == None:
                 raise StopIteration()
             
             return chunk
