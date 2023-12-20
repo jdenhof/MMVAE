@@ -1,4 +1,4 @@
-from CellCensusDataLoader import CellCensusDataLoader
+from DataLoader import CellCensusDataLoader
 from utils import debug_attribute, attribute_initilized_error, isinstance_error, assert_fields_exists
 import torch
 import time

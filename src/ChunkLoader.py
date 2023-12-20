@@ -161,11 +161,10 @@ class _Cleaner(mp.Process):
             finally:
                 attempt += 1
 
-class MultiProcessChunkLoader:
+class ChunkLoader:
 
-    def __init__(self, num_workers: int, buffer_size: int, directory: str, phase: str):
+    def __init__(self, num_workers: int, buffer_size: int, paths: list[str]):
         self._factory = _SharedResourceFactory(buffer_size)
-        paths = MultiProcessChunkLoader._initialize_chunk_paths(directory, phase)
         self._distributer = _Distributer(num_workers, self._factory, paths)
 
     def set_epoch(self, epoch: int):
@@ -184,11 +183,3 @@ class MultiProcessChunkLoader:
         self._distributer.join()
         done_cleaning.set()
         cleaner.join()
-    
-    @staticmethod
-    def _initialize_chunk_paths(directory: str, phase: int):
-        phase = '' if DEBUG else phase # overrides phase so chunks only need to end in .npz
-        chunk_paths = [os.path.join(directory, path) for path in os.listdir(directory) if 'chunk' in path and '.npz' in path and phase in path]
-        if chunk_paths is None or len(chunk_paths) == 0:
-            raise FileNotFoundError(f"No chunks found at {directory}\nTain Example file:\nchunk_1_train.npz\nTest Example File:\ntest_chunk_1.npz")
-        return chunk_paths

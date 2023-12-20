@@ -1,6 +1,6 @@
 from torch.utils.data import IterableDataset
 from utils import attribute_initilized_error
-from MultiProcessChunkLoader import MultiProcessChunkLoader
+from ChunkLoader import ChunkLoader
 from scipy.sparse import csr_matrix
 import queue
 import torch
@@ -12,7 +12,7 @@ class CellCensusDataset(IterableDataset):
 
     _initialized = False
     
-    def __init__(self, chunk_loader: MultiProcessChunkLoader, batch_size: int):
+    def __init__(self, chunk_loader: ChunkLoader, batch_size: int):
         super(CellCensusDataset, self).__init__()
         self._chunk_loader = chunk_loader
         self.batch_size = batch_size
@@ -74,5 +74,5 @@ class CellCensusDataset(IterableDataset):
 
         super().__setattr__(attr, val)
 
-    _chunk_loader: MultiProcessChunkLoader = None
+    _chunk_loader: ChunkLoader = None
     _current_chunk: csr_matrix = None

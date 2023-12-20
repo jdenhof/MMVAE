@@ -1,7 +1,6 @@
 from torch.utils.data import DataLoader
-from CellCensusDataset import CellCensusDataset
-from MultiProcessChunkLoader import MultiProcessChunkLoader as ChunkLoader
-import Phase
+from Dataset import CellCensusDataset
+from ChunkLoader import ChunkLoader
 
 class CellCensusDataLoader(DataLoader):
 
@@ -11,10 +10,9 @@ class CellCensusDataLoader(DataLoader):
             num_workers: int, 
             num_chunk_workers: int, 
             buffer_size: int,
-            directory: str, 
-            phase: str
+            chunk_paths: list[str]
         ) -> None:
-        self._chunk_loader = ChunkLoader(num_chunk_workers, buffer_size, directory, Phase.validate(phase))
+        self._chunk_loader = ChunkLoader(num_chunk_workers, buffer_size, chunk_paths)
         super(CellCensusDataLoader, self).__init__(
             dataset=CellCensusDataset(self._chunk_loader, batch_size),
             num_workers=num_workers,
