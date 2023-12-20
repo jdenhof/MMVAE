@@ -1,10 +1,8 @@
-class Phase:
-    train = 'train'
-    test = 'test'
-    phases = ('train', 'test')
+TRAIN = 'train'
+TEST = 'test'
+PHASES = ('train', 'test')
 
-    def validate(phase):
-        if phase not in Phase.phases:
-            raise ValueError(f"Phase {phase} not in {Phase.phases}")
-        return phase
-    
+def validate(phase):
+    if phase not in PHASES:
+        raise ValueError(f"Phase {phase} not in {PHASES}")
+    return phase

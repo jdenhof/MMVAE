@@ -1,39 +1,43 @@
 
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager
-from queue import Empty, Queue
+import queue
 from multiprocessing.synchronize import Event
-from typing import Any
 import scipy.sparse as sp
 import collections
-from utils import DEBUG, assert_fields_exists, isinstance_error, print, attribute_initilized_error
+from utils import DEBUG
 import os
 
-class _ChunkMananger(SyncManager):
 
-    def __init__(self, num_workers: int, buffer_size: int):
-        super().__init__()
-        self.start()
-        self.num_workers = num_workers
-        if buffer_size > 20:
-            raise ValueError(f"Buffer size max set to 20 - [:{buffer_size}]")
-        self.chunk_queue: Queue[sp.csr_matrix] = self.Queue(maxsize=buffer_size)
-        self.completion_queue: Queue[int] = self.Queue() # must be infinite to prevent blocking workers
-
-class MyManager(BaseManager):
+class _ChunkManager(BaseManager):
     pass
 
-MyManager.register('Maths', MathsClass)
+# Register Queue and Event with the manager
+_ChunkManager.register('get_queue', mp.Queue)
+_ChunkManager.register('get_event', mp.Event)
+
+class _SharedResourceFactory:
+
+    def __init__(self, buffer_size: int):
+        super().__init__()
+        self.manager = _ChunkManager()
+        self.manager.start()
+        if buffer_size > 20:
+            raise ValueError(f"Buffer size max set to 20 - [:{buffer_size}]")
+        self.chunk_queue: mp.Queue = self.manager.get_queue(maxsize=buffer_size)
+        self.completion_queue: mp.Queue = self.manager.get_queue() # must be infinite to prevent blocking workers
+        self.quit_event: Event = self.manager.get_event()
 
 Msg = collections.namedtuple('Msg', ['event', 'args'])
 class BaseProcess(mp.Process):
     """A process backed by an internal queue for simple one-way message passing.
     """
-    def __init__(self, queue: Queue):
+    def __init__(self, queue: mp.Queue, quit_event: Event):
         super().__init__()
         self.queue = queue
+        self.quit_event = quit_event
 
-    def send(self, event, *args, queue):
+    def send(self, event, *args):
         """Puts the event and args as a `Msg` on the queue
         """
         msg = Msg(event, args)
@@ -50,28 +54,39 @@ class BaseProcess(mp.Process):
 
     def run(self):
         while True:
-            msg = self.queue.get()
+            if self.quit_event.is_set():
+                break
+            try:
+                msg = self.queue.get(timeout=1)
+            except queue.Empty:
+                continue
             if msg is None:
                 break
             self.dispatch(msg)
 
 class _ManagedBaseProcess(BaseProcess):
-    def __init__(self, manager: _ChunkMananger):
-        super().__init__(manager.Queue())
+    def __init__(self, resource_factory: _SharedResourceFactory):
+        super().__init__(resource_factory.manager.get_queue(), quit_event=resource_factory.quit_event)
 
 class _Worker(_ManagedBaseProcess):
 
-    def __init__(self, manager: _ChunkMananger, id: int):
-        super().__init__(manager)
+    def __init__(self, resource_factory: _SharedResourceFactory, id: int):
+        super().__init__(resource_factory)
         self.id = id
-        self.chunk_queue = manager.chunk_queue
-        self.completion_queue = manager.completion_queue
+        self.chunk_queue = resource_factory.chunk_queue
+        self.completion_queue = resource_factory.completion_queue
 
     def do_load_chunk(self, path: str):
         chunk = _Worker._load_chunk(path)
-        self.chunk_queue.put(chunk)
+        put_chunk = False
+        while not self.quit_event.is_set() and not put_chunk:
+            try:
+                self.chunk_queue.put(chunk, timeout=1)
+                put_chunk = True
+            except queue.Full:
+                continue
+
         self.completion_queue.put(self.id)
-        print(f"Worker {self.id} put chunk", f'worker_{self.id}_put')
 
     @staticmethod
     def _load_chunk(path):
@@ -79,13 +94,13 @@ class _Worker(_ManagedBaseProcess):
 
 class _Distributer(_ManagedBaseProcess):
 
-    def __init__(self, manager: _ChunkMananger, paths: list[str]):
-        super().__init__(manager)
-        self.num_workers = manager.num_workers
-        self.completion_queue = manager.completion_queue
-        self.chunk_queue = manager.chunk_queue
+    def __init__(self, num_workers: int, resource_factory: _SharedResourceFactory, paths: list[str]):
+        super().__init__(resource_factory)
+        self.num_workers = num_workers
+        self.completion_queue = resource_factory.completion_queue
+        self.chunk_queue = resource_factory.chunk_queue
         self.paths = paths
-        self.workers = [_Worker(manager, i) for i in range(manager.num_workers)]
+        self.workers = [_Worker(resource_factory, i) for i in range(num_workers)]
 
     def start(self):
         for worker in self.workers:
@@ -94,10 +109,7 @@ class _Distributer(_ManagedBaseProcess):
 
     def join(self):
         for worker in self.workers:
-            worker.send('quit')
-        for worker in self.workers:
             worker.join()
-        self.send('quit')
         super().join()
 
     def close(self):
@@ -110,64 +122,73 @@ class _Distributer(_ManagedBaseProcess):
             worker.terminate()
         super().terminate()
 
-    def do_distribute(self, epoch):
+    def do_distribute(self, epoch: int):
         epoch = epoch if epoch is not None else 'not defined'
         task_count = len(self.paths)
-        print(f"Distributing chunks for epoch {epoch}", 'stager_distribute')
+
         for i, path in enumerate(self.paths):
             self.workers[i % self.num_workers].send('load_chunk', path)
 
         while task_count > 0:
-            self.completion_queue.get()
+            try:
+                if (self.quit_event.is_set):
+                    return
+                self.completion_queue.get(timeout=1)
+            except queue.Empty:
+                continue
             task_count -= 1
-
-        print(f"Workers finished loading all chunks for epoch {epoch}", 'stager_complete')
+        print("DONE DISTRIBUTING")
         self.chunk_queue.put(None)
-    
+
+class _Cleaner(mp.Process):
+
+    def __init__(self, queue: queue.Queue, done_cleaning: Event):
+        self.queue = queue
+        self.done_cleaning = done_cleaning
+        super().__init__()
+
+    def run(self):
+        attempt = 0
+        while not self.done_cleaning.is_set():
+            try:
+                # Try to get an item from the queue
+                item = self.queue.get(timeout=1)  # Wait for wait_time seconds for an item
+                del item
+            except queue.Empty:
+                # No item was found in the queue for wait_time seconds
+                if attempt % 25 == 0:
+                    print("Queue has been empty for a while, cleaner is checking again...")
+            finally:
+                attempt += 1
+
 class MultiProcessChunkLoader:
 
-    def __init__(self, epoch: int, max_epochs: int, num_workers: int, buffer_size: int, directory: str, phase: str):
-        self.epoch = epoch
-        self.max_epochs = max_epochs
-        self._manager = _ChunkMananger(num_workers, buffer_size)
+    def __init__(self, num_workers: int, buffer_size: int, directory: str, phase: str):
+        self._factory = _SharedResourceFactory(buffer_size)
         paths = MultiProcessChunkLoader._initialize_chunk_paths(directory, phase)
-        self._distributer = _Distributer(self._manager, paths)
+        self._distributer = _Distributer(num_workers, self._factory, paths)
 
-    def start(self, start_epoch: int, max_epochs: int):
-        """Loads all epochs into epoch_queue"""
-        for i in range(start_epoch, max_epochs):
-            if not self._distributer.is_alive():
-                raise RuntimeError("The chunk loader has mysteriously quit!")
-            self._distributer.send('distribute', i)
-        print("Done setting staging epochs")
+    def set_epoch(self, epoch: int):
+        if not self._distributer.is_alive():
+            raise RuntimeError("The chunk loader has mysteriously quit!")
+        self._distributer.send('distribute', epoch)
 
     def get(self, block=True, timeout: float = None):
-        return self._distributer.chunk_queue.get(block=block, timeout=timeout)
+        return self._factory.chunk_queue.get(block=block, timeout=timeout)
+    
+    def quit(self):
+        done_cleaning: Event = self._factory.manager.get_event()
+        cleaner = _Cleaner(self._factory.chunk_queue, done_cleaning)
+        self._factory.quit_event.set()
+        cleaner.start()
+        self._distributer.join()
+        done_cleaning.set()
+        cleaner.join()
     
     @staticmethod
     def _initialize_chunk_paths(directory: str, phase: int):
         phase = '' if DEBUG else phase # overrides phase so chunks only need to end in .npz
-        chunk_paths = [os.path.join(directory, path) for path in os.listdir(directory) if '.npz' in path and phase in path]
+        chunk_paths = [os.path.join(directory, path) for path in os.listdir(directory) if 'chunk' in path and '.npz' in path and phase in path]
         if chunk_paths is None or len(chunk_paths) == 0:
             raise FileNotFoundError(f"No chunks found at {directory}\nTain Example file:\nchunk_1_train.npz\nTest Example File:\ntest_chunk_1.npz")
         return chunk_paths
-
-    def __enter__(self):
-        self._distributer.start()
-        self.start(self.epoch, self.max_epochs)
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        print(f"Exiting Chunk Loader {exc_type is StopIteration}")
-        try:
-            if exc_type is StopIteration:
-                raise NotImplementedError() # Cannot figure out how to cleanly exit
-                self._distributer.join()
-                self._distributer.close()
-            else:
-                raise NotImplementedError()
-        except:
-            self._distributer.terminate()
-        finally:
-            self._manager.shutdown()
-        return exc_type is StopIteration

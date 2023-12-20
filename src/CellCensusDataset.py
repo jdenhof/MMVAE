@@ -1,38 +1,29 @@
-from queue import Empty
 from torch.utils.data import IterableDataset
-from utils import assert_fields_exists, attribute_initilized_error, print
-from UltraChunkLoader import ChunkLoader
-from scipy.sparse import csr_matrix as CsrMatrix
+from utils import attribute_initilized_error
+from MultiProcessChunkLoader import MultiProcessChunkLoader
+from scipy.sparse import csr_matrix
+import queue
 import torch
 
 # dev only
 from utils import DEBUG
 
-_static_req = (
-    'batch_size',
-    'device',
-    'sample_size',
-)
-
-class DistributedChunkDataset(IterableDataset):
+class CellCensusDataset(IterableDataset):
 
     _initialized = False
     
-    def __init__(self, batch_size: int, device: str, sample_size: int, loader: ChunkLoader = None):
-        super(DistributedChunkDataset, self).__init__()
-        self.device = device
+    def __init__(self, chunk_loader: MultiProcessChunkLoader, batch_size: int):
+        super(CellCensusDataset, self).__init__()
+        self._chunk_loader = chunk_loader
         self.batch_size = batch_size
-        self.sample_size = sample_size
-        self.loader = loader
-
-        assert_fields_exists(self, *_static_req)
-        self._initialized = True
 
     @property
     def ready(self):
-        return getattr(self, 'loader', None) is not None
+        return getattr(self, '_chunk_loader', None) is not None
 
     def __iter__(self):
+        if not self.ready:
+            raise RuntimeError("Dataset is not ready to be iterated - Chunk loader not initialized")
         self._current_chunk = None
         return self
 
@@ -40,17 +31,14 @@ class DistributedChunkDataset(IterableDataset):
         retrys = 0
         while max_retrys > retrys:
             try:
-                chunk = self.loader.get(timeout=5 * retrys)
-            except Empty:
+                chunk = self._chunk_loader.get(timeout=5 * retrys)
+            except queue.Empty:
                 retrys += 1
-                print("Retrying get...")
                 continue
 
             if chunk is None:
-                print("Raising stop iteration", 'stop_iteration')
                 raise StopIteration()
             
-            print(f"Chunk popped from queue in {retrys} tr{'y' if retrys == 1 else 'ies'}", 'chunk_popped')
             return chunk
         raise ValueError("Max retrys exceeded!")
     
@@ -61,6 +49,7 @@ class DistributedChunkDataset(IterableDataset):
             self._batch_index = 0
     
         chunk_size = self._current_chunk.shape[1]
+        
         if self._batch_index + self.batch_size >= chunk_size:
             self._current_chunk = None
             self.__next__()
@@ -68,22 +57,15 @@ class DistributedChunkDataset(IterableDataset):
         if self._batch_index > chunk_size:
             raise ValueError("Batch start index exceeded chunk size!")
         
-        if self._batch_index + self.batch_size > chunk_size:
+        if self._batch_index + self.batch_size >= chunk_size:
             raise ValueError("Batch end index exceeded chunk size!")
-
+        
         batch = self._current_chunk[self._batch_index:self._batch_index + self.batch_size, :]
-        assert(isinstance(batch, CsrMatrix))
+        assert(isinstance(batch, csr_matrix))
         if not batch.shape[0] == self.batch_size:
             raise ValueError(f"Batch of shape {batch.shape} does not equal batch size {self.batch_size} ({self._batch_index}, {self._batch_index + self.batch_size}, {chunk_size})!")
         self._batch_index += self.batch_size
-        return torch.sparse_csr_tensor(batch.indptr, batch.indices, batch.data, batch.shape, check_invariants=DEBUG, device=self.device)
-        
-    def __len__(self):
-        """ Note: 
-        TODO: Could change due to no longer using DDP
-            - Length must be known at __init__ because chunk_size cannot be determined until first call of __iter__ which happens after __len__ called
-        """
-        return self.sample_size
+        return torch.sparse_csr_tensor(batch.indptr, batch.indices, batch.data, batch.shape, check_invariants=DEBUG)
     
     def __setattr__(self, attr: str, val) -> None:
 
@@ -92,5 +74,5 @@ class DistributedChunkDataset(IterableDataset):
 
         super().__setattr__(attr, val)
 
-    loader: ChunkLoader = None
-    _current_chunk: CsrMatrix = None
+    _chunk_loader: MultiProcessChunkLoader = None
+    _current_chunk: csr_matrix = None
