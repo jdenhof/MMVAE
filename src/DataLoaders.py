@@ -1,7 +1,8 @@
 from torch.utils.data import DataLoader
 from Dataset import CellCensusDataset
+from utils import isinstance_error
 from ChunkLoader import ChunkLoader
-
+    
 class CellCensusDataLoader(DataLoader):
 
     def __init__(
@@ -20,12 +21,12 @@ class CellCensusDataLoader(DataLoader):
             shuffle=False,
             pin_memory=False, # TODO: Fix at https://github.com/pytorch/pytorch/issues/115330#issuecomment-1853919592 to set True
         )
+        self._start()
 
     def __iter__(self):
         if getattr(self, 'epoch', None) is None: 
-            raise RuntimeError("Epoch not set in dataloader CellCensusDataLoader.set_epoch(epoch: int, max_epochs: int = None)")
+            raise RuntimeError("Epoch not set in dataloader loader.set_epoch(epoch: int, max_epochs: int = None)")
         return super().__iter__()
-        
 
     def set_epoch(self, epoch: int, max_epochs: int = None):
 
@@ -36,14 +37,19 @@ class CellCensusDataLoader(DataLoader):
             self._chunk_loader.set_epoch(epoch + 1)
         self.epoch = epoch
 
-    def __enter__(self):
-        self._chunk_loader._distributer.start()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
+    def _exit(self):
         try:
             self._chunk_loader.quit()
         except:
             self._chunk_loader._distributer.terminate()
         finally:
             self._chunk_loader._factory.manager.shutdown()
+    
+    def _start(self):
+        self._chunk_loader._distributer.start()
+
+    def __del__(self):
+        self.exit()
+
+    
+            

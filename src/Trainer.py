@@ -1,4 +1,4 @@
-from DataLoader import CellCensusDataLoader
+from DataLoaders import CellCensusDataLoader
 from utils import debug_attribute, attribute_initilized_error, isinstance_error, assert_fields_exists
 import torch
 import time
@@ -21,7 +21,7 @@ _watch = (
     'epoch',
 )
 
-class Trainer:
+class MultiModalTrainer:
 
     def __init__(
         self,

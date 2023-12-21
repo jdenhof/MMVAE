@@ -23,20 +23,20 @@ def main(args: Args):
     from torch.nn.parallel import DistributedDataParallel as DDP
     model = DDP(model, device_ids=[rank], output_device=[rank])
 
-    from DataLoader import CellCensusDataLoader
-    with CellCensusDataLoader(
+    from DataLoaders import CellCensusDataLoader
+    loader = CellCensusDataLoader(
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         num_chunk_workers=args.num_chunk_workers,
         buffer_size=args.chunk_buffer_size,
         chunk_paths=_initialize_chunk_paths(args.chunks_directory)[:5]
-    ) as loader:
+    )
         
-        optimizer = torch.optim.Adam(model.parameters()) 
-        
-        from Trainer import Trainer
-        trainer = Trainer(model, loader, rank, optimizer, args.save_every, args.snapshot_path)
-        trainer.train(args.total_epochs)
+    optimizer = torch.optim.Adam(model.parameters()) 
+    
+    from Trainer import Trainer
+    trainer = Trainer(model, loader, rank, optimizer, args.save_every, args.snapshot_path)
+    trainer.train(args.total_epochs)
 
     dist.destroy_process_group()
     print("Training Complete!")
