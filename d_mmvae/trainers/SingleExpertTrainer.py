@@ -17,85 +17,71 @@ class SingleExpertTrainer(BaseTrainer):
         self.batch_size = batch_size # Defined before super().__init__ as configure_* is called on __init__
         super(SingleExpertTrainer, self).__init__(*args, **kwargs)
         self.model.to(self.device)
-        self.expert_class_indices = [i for i in range(len(self.model.experts)) ]
+        # self.expert_class_indices = [i for i in range(len(self.model.experts)) ]
+        self.annealing_steps = 50
 
     def configure_dataloader(self):
-        expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk*'], batch_size=self.batch_size, num_workers=1)
+        #expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk*'], batch_size=self.batch_size, num_workers=1)
+        expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk_1*'], batch_size=self.batch_size, num_workers=1)
         return MultiModalLoader(expert)
 
     def configure_model(self):
-        return SingleExpertVAE.configure_model(num_experts=1)
+        return SingleExpertVAE.configure_model()
     
     def configure_optimizers(self) -> dict[str, torch.optim.Optimizer]:
-        optimizers = {}
-        for name in self.model.experts.keys():
-            expert = self.model.experts[name]
-            optimizers[f'{name}-enc'] = torch.optim.Adam(expert.encoder.parameters())
-            optimizers[f'{name}-dec'] = torch.optim.Adam(expert.decoder.parameters())
-            optimizers[f'{name}-disc'] = torch.optim.Adam(expert.discriminator.parameters())
-
-        optimizers['solo_enc_disc'] = torch.optim.Adam(self.model.solo_vae.encoder.discriminator.parameters())
-        optimizers['solo_vae'] = torch.optim.Adam(list(self.model.solo_vae.encoder.parameters()) + list(self.model.solo_vae.decoder.parameters()))
-        return optimizers
-
-    def vae_loss(self, predicted, target, mu, sigma, kl_weight = 1):
-        vae_recon_loss = F.mse_loss(predicted, target)
-        kl_loss = utils.kl_divergence(mu, sigma)
-        return vae_recon_loss + kl_loss * kl_weight
-    
-    def expert_discriminator_loss(self, data, expert, real=True):
-        output = self.model.experts[expert].discriminator(data)
-        labels = torch.ones(output.size(), device=self.device) if real else torch.zeros(output.size(), device=self.device)
-        loss = F.binary_cross_entropy(output, labels)
-        return loss
+        return {
+            'encoder': torch.optim.Adam(self.model.expert.encoder.parameters(), lr=0.0001),
+            'decoder': torch.optim.Adam(self.model.expert.decoder.parameters(), lr=0.0001),
+            'solo_vae': torch.optim.Adam(self.model.solo_vae.parameters(), lr=.00001)
+        }
 
     def train_epoch(self, epoch):
-        for iteration, (data, expert) in enumerate(self.dataloader):
+        old_train_data = None
+        for iteration, (data, _) in enumerate(self.dataloader):
             print("Starting Iteration", iteration, flush=True)
-            self.model.set_expert(expert)
             train_data = data.to(self.device)
             
-            # Forwad Pass Over Entire Model
-            shared_input, shared_output, mu, var, shared_encoder_outputs, shared_decoder_outputs, expert_output = self.model(train_data)
-
-            # Train Expert Discriminator
-            if iteration % 5 == 0:
-                # Zero Expert Discriminator Gradients
-                opt_exp_disc = self.optimizers[f'{expert}-disc']
-                opt_exp_disc.zero_grad()
-                # Train discriminator on Real Data
-                real_loss = self.expert_discriminator_loss(train_data, expert)
-                real_loss.backward()
-                # Train discriminator on fake data
-                fake_loss = self.expert_discriminator_loss(expert_output.detach(), expert, real=False)
-                # Update Expert Discriminator Gradients
-                fake_loss.backward()
-                opt_exp_disc.step()
-
-            # Zero Shared VAE and Expert Gradients
+            # Zero All Gradients
             self.optimizers['solo_vae'].zero_grad()
-            self.optimizers['solo_enc_disc'].zero_grad()
-            # Expert Reconstruction Loss
-            expert_recon_loss = F.mse_loss(expert_output, train_data.to_dense())
-            # Shared VAE Loss
-            vae_loss = self.vae_loss(shared_output, shared_input, mu, var)
-            # Shared Encoder Adverserial Feedback
-            labels = torch.tensor([self.expert_class_indices] * 32, dtype=float, device=self.device)
-            shr_enc_adversial_loss = F.cross_entropy(shared_encoder_outputs, labels)
-            # Shared Expert Discriminator Loss
-            shared_loss = self.expert_discriminator_loss(expert_output.detach(), expert, real=False)
-            adv_weight = -0.1 # TODO: Add annealing factor
-            total_loss = expert_recon_loss + vae_loss + adv_weight * shr_enc_adversial_loss + shared_loss
-            total_loss.backward()
+            self.optimizers['encoder'].zero_grad()
+            self.optimizers['decoder'].zero_grad()
+                                                        
+            # Forward Pass Over Entire Model
+            re_param, mu, var, decoded = self.model(train_data)
+            
+            print(f"mu: {mu.mean()}")
+            print(f"var: {var.mean()}")
         
-            self.optimizers['solo_enc_disc'].step()
-            self.optimizers['solo_vae'].step()
-            self.optimizers[f'{expert}-enc'].step()
-            self.optimizers[f'{expert}-dec'].step()
+            recon_loss = F.l1_loss(decoded, train_data.to_dense())
+            
+            # Shared VAE Loss
+            kl_div = -0.5 * torch.sum(1 + var 
+                                      - mu**2 
+                                      - torch.exp(var), 
+                                      axis=1) # sum over latent dimension
+            
+            kl_loss = kl_div.mean() # average over batch dimension
+            
+            #kl_loss = utils.kl_divergence(mu, var)
+            kl_weight = 1 #min(1.0, epoch / self.annealing_steps)
+            loss = recon_loss + (kl_loss * kl_weight)
+            loss.backward()
 
-            self.writer.add_scalar('Loss/Expert_Recon', expert_recon_loss.item(), iteration)
-            self.writer.add_scalar('Loss/VAE', vae_loss.item(), iteration)
-            self.writer.add_scalar('Loss/Shared_Encoder_Adversarial', shr_enc_adversial_loss.item(), iteration)
-            self.writer.add_scalar('Loss/Shared', shared_loss.item(), iteration)
-            self.writer.add_scalar('Loss/Total', total_loss.item(), iteration)
+            self.optimizers['solo_vae'].step()
+            self.optimizers[f'encoder'].step()
+            self.optimizers[f'decoder'].step()
+            
+            if iteration > 0:
+                try:
+                    baseline = F.l1_loss(train_data.to_dense(), old_train_data.to_dense())
+                    self.writer.add_scalar('Baseline', baseline.item(), iteration)
+                except:
+                    pass
+            
+            self.writer.add_scalar('Loss/KL', kl_loss.item(), iteration)
+            self.writer.add_scalar('Loss/ReconstructionFromTrainingData', recon_loss.item(), iteration)
+            self.writer.add_scalar('Loss/TotalLoss', loss.item(), iteration)
+            
             self.writer.flush()
+            
+            old_train_data = train_data

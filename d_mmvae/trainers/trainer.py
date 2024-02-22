@@ -13,7 +13,7 @@ class BaseTrainer:
         device: str,
         log_dir: str = None,
         snapshot_path: str = None, 
-        save_every: int = None
+        save_every: int = 3
     ) -> None:
         self.model = self.configure_model()
         self.optimizers = self.configure_optimizers()
@@ -46,7 +46,7 @@ class BaseTrainer:
         snapshot = {}
         snapshot["MODEL_STATE"] = model.state_dict()
         snapshot["EPOCHS_RUN"] = epoch
-        torch.save(snapshot, self.snapshot_path)
+        torch.save(snapshot, f"{self.snapshot_path}_{epoch}")
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
     def train_epoch(self, epoch: int):
@@ -65,7 +65,7 @@ class BaseTrainer:
         for epoch in range(epochs):
             self.train_epoch(epoch)
             if (epoch + 1) % self.save_every == 0:
-                self.save_snapshot(self.model)
+                self.save_snapshot(self.model, epoch=epoch)
         
         if self.writer is not None:
             self.writer.close()
