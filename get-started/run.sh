@@ -4,13 +4,13 @@
 
 #SBATCH --mem=1024 ##Memory I want to use in MB
 
-#SBATCH --time=00:05:00 ## time it will take to complete job
+#SBATCH --time=06:00:00 ## time it will take to complete job
 
-#SBATCH --partition=all ##Partition I want to use
+#SBATCH --partition=gpu ##Partition I want to use
 
 #SBATCH --ntasks=1 ##Number of task
 
-#SBATCH --job-name=test-jo ## Name of job
+#SBATCH --job-name=jh ## Name of job
 
 #SBATCH --output=test-job.%j.out ##Name of output file
 
