@@ -18,11 +18,11 @@ class SingleExpertTrainer(BaseTrainer):
         super(SingleExpertTrainer, self).__init__(*args, **kwargs)
         self.model.to(self.device)
         # self.expert_class_indices = [i for i in range(len(self.model.experts)) ]
-        self.annealing_steps = 50
+        self.annealing_steps = 25
 
     def configure_dataloader(self):
         #expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk*'], batch_size=self.batch_size, num_workers=1)
-        expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk_1*'], batch_size=self.batch_size, num_workers=1)
+        expert = CellCensusDataLoader('expert', directory_path="/active/debruinz_project/CellCensus_3M", masks=['3m_human_chunk_10*'], batch_size=self.batch_size, num_workers=1)
         return MultiModalLoader(expert)
 
     def configure_model(self):
@@ -47,24 +47,21 @@ class SingleExpertTrainer(BaseTrainer):
             self.optimizers['decoder'].zero_grad()
                                                         
             # Forward Pass Over Entire Model
-            re_param, mu, var, decoded = self.model(train_data)
+            _, mu, var, decoded = self.model(train_data)
             
-            print(f"mu: {mu.mean()}")
-            print(f"var: {var.mean()}")
+            # print(f"mu: {mu.mean()}")
+            # print(f"var: {var.mean()}")
         
             recon_loss = F.l1_loss(decoded, train_data.to_dense())
             
             # Shared VAE Loss
-            kl_div = -0.5 * torch.sum(1 + var 
-                                      - mu**2 
-                                      - torch.exp(var), 
-                                      axis=1) # sum over latent dimension
+            kl_div = -0.5 * torch.sum(1 + var - mu**2 - torch.exp(var), axis=1) # sum over latent dimension
             
             kl_loss = kl_div.mean() # average over batch dimension
+            print(f"var: |{var.min()}, {var.max()}|  mu: |{mu.min()}, {mu.max()}|  kl_loss: {kl_loss}")
             
-            #kl_loss = utils.kl_divergence(mu, var)
-            kl_weight = 1 #min(1.0, epoch / self.annealing_steps)
-            loss = recon_loss + (kl_loss * kl_weight)
+            beta = min(1.0, epoch / self.annealing_steps)
+            loss = recon_loss + beta * kl_loss
             loss.backward()
 
             self.optimizers['solo_vae'].step()

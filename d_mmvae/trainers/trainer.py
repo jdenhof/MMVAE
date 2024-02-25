@@ -13,7 +13,7 @@ class BaseTrainer:
         device: str,
         log_dir: str = None,
         snapshot_path: str = None, 
-        save_every: int = 3
+        save_every: int = 50
     ) -> None:
         self.model = self.configure_model()
         self.optimizers = self.configure_optimizers()

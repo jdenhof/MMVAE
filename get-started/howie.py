@@ -9,8 +9,8 @@ def main(device):
     trainer = SingleExpertTrainer(
         batch_size,
         device,
-        log_dir='/home/howlanjo/logs/' + datetime.now().strftime("%Y%m%d-%H%M%S") + "_ALL_THE_10s",
-        snapshot_path="/home/howlanjo/dev/MMVAE/snapshots/" + datetime.now().strftime("%Y%m%d-%H%M%S") + "_ALL_THE_10s" ,
+        log_dir='/home/howlanjo/logs/' + datetime.now().strftime("%Y%m%d-%H%M%S") + "_JUST_10",
+        snapshot_path="/home/howlanjo/dev/MMVAE/snapshots/" + datetime.now().strftime("%Y%m%d-%H%M%S") + "_JUST_10" ,
     )
     # Train model with number of epochs
     trainer.train(epochs=50)
