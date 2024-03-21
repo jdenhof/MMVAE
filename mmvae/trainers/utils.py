@@ -17,6 +17,7 @@ def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor, reduction="sum"):
         return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
     if reduction == "mean":
         return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
+    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
 def cyclic_annealing(batch_iteration, cycle_length, min_beta=0.0, max_beta=1.0, ceil_downswings=True, floor_upswings=False):
     """

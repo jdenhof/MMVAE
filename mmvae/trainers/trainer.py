@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torchdata.dataloader2 as dl
 import inspect
 import torch.utils.tensorboard as tb
 from typing import Any
@@ -34,7 +33,7 @@ class BaseTrainer:
 
         self.__initialized = True
 
-    def configure_dataloader(self) -> dl.DataLoader2:
+    def configure_dataloader(self) -> Any:
         raise NotImplementedError()
 
     def configure_model(self) -> nn.Module:
