@@ -16,7 +16,7 @@ class HumanVAEConfig(BaseTrainerConfig):
         'expert.encoder.optimizer.lr': float,
         'expert.decoder.optimizer.lr': float, 
         'shr_vae.optimizer.lr': float, 
-        'kl_cyclic.warm_start': int, 
+        'kl_cyclic.warm_start': float, 
         'kl_cyclic.cycle_length': float, 
         'kl_cyclic.min_beta': float, 
         'kl_cyclic.max_beta': float 
@@ -116,23 +116,26 @@ class HumanVAETrainer(HPBaseTrainer):
             self.writer.add_hparams(dict(self.hparams), self.metrics, run_name=f"{self.hparams['tensorboard.run_name']}_hparams", global_step=epoch)
         print("Total testing time: ", time.time() - start_time, flush=True)
         
-    def trace_train_expert(self, train_data: torch.Tensor, kl_weight: float):
+    def trace_train_expert(self, train_data: torch.Tensor, kl_weight: float, log_skip = 100):
+        
+        self.optimizers['shr_vae'].zero_grad()
+        self.optimizers['expert.encoder'].zero_grad()
+        self.optimizers['expert.decoder'].zero_grad()
+        
         x_hat, mu, logvar, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
         
         kl_weighted = (kl_weight * kl_loss)
         loss: torch.Tensor = recon_loss + kl_weighted
         
-        self.optimizers['shr_vae'].zero_grad()
-        self.optimizers['expert.encoder'].zero_grad()
-        self.optimizers['expert.decoder'].zero_grad()
         loss.backward()
+        
         self.optimizers['shr_vae'].step()
         self.optimizers['expert.encoder'].step()
         self.optimizers['expert.decoder'].step()
         
         loss_unweighted = (recon_loss + kl_loss).detach()
         
-        if self.epoch_batch_iteration == 0:
+        if self.batch_iteration % log_skip == 0:
             self.kl_weighted_sum = 0
             self.loss_unweighted_sum = 0
             self.kl_sum = 0
@@ -147,12 +150,12 @@ class HumanVAETrainer(HPBaseTrainer):
         
         if hasattr(self, 'writer'):
             self.writer.add_scalar('Metric/KLWeight', kl_weight, self.batch_iteration)
-            if self.epoch_batch_iteration % 100 == 0:
-                self.writer.add_scalar('Train/Loss/KL', self.kl_weighted_sum / mu.numel() / self.epoch_batch_iteration, self.batch_iteration)
-                self.writer.add_scalar('Train/Loss/Recon', self.recon_sum / x_hat.numel() / self.epoch_batch_iteration, self.batch_iteration)
-                self.writer.add_scalar('Train/Loss/Total', self.loss_sum / self.epoch_batch_iteration, self.batch_iteration)
-                self.writer.add_scalar('Train/Loss/Unweighted/KL', self.kl_sum / mu.numel() / self.epoch_batch_iteration, self.batch_iteration)
-                self.writer.add_scalar('Train/Loss/Unweighted/Total', self.loss_unweighted_sum / self.epoch_batch_iteration , self.batch_iteration)
+            if (self.batch_iteration + 1) % log_skip == 0:
+                self.writer.add_scalar('Train/Loss/KL', self.kl_weighted_sum / mu.numel() / log_skip, self.batch_iteration)
+                self.writer.add_scalar('Train/Loss/Recon', self.recon_sum / x_hat.numel() / log_skip, self.batch_iteration)
+                self.writer.add_scalar('Train/Loss/Total', self.loss_sum / x_hat.numel() / log_skip, self.batch_iteration)
+                self.writer.add_scalar('Train/Loss/Unweighted/KL', self.kl_sum / mu.numel() / log_skip, self.batch_iteration)
+                self.writer.add_scalar('Train/Loss/Unweighted/Total', self.loss_unweighted_sum / x_hat.numel() / log_skip, self.batch_iteration)
             
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -167,17 +170,9 @@ class HumanVAETrainer(HPBaseTrainer):
         self.model.train()
         warm_start = self.hparams['kl_cyclic.warm_start']
         kl_weight = 0
-        
-        # NOTE: DEBUGGING
-        epoch_start_time, total_batch_load_time = time.time(), 0 
-        
-        for i, (train_data,) in enumerate(self.train_loader):
-            self.epoch_batch_iteration = i
+
+        for (train_data,) in self.train_loader:
             self.batch_iteration += 1
-            if self.epoch_batch_iteration == 1:
-                first_batch_load_time = time.time() - epoch_start_time
-            else:
-                total_batch_load_time += time.time() - start_time
             
             train_data = train_data.to(self.device)
             kl_weight = kl_weight if self.batch_iteration < warm_start \
@@ -185,11 +180,6 @@ class HumanVAETrainer(HPBaseTrainer):
                     self.batch_iteration, self.hparams['kl_cyclic.cycle_length'], 
                     min_beta=self.hparams['kl_cyclic.min_beta'], max_beta=self.hparams['kl_cyclic.max_beta'])
             self.trace_train_expert(train_data, kl_weight)
-            start_time = time.time()
-        
-        # NOTE: DEBUGGING
-        print("First Batch Load Time: ", first_batch_load_time)
-        print("- Avg Batch Load Time: ", total_batch_load_time / self.epoch_batch_iteration)
         
         self.trace_test_expert(epoch)
         
