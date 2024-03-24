@@ -1,6 +1,6 @@
 import torch
 
-def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor, reduction="sum"):
+def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor, reduction=None):
     """
     Calculate the KL divergence between a given Gaussian distribution q(z|x)
     and the standard Gaussian distribution p(z).
@@ -13,11 +13,10 @@ def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor, reduction="sum"):
     Returns:
     - torch.Tensor: The KL divergence.
     """
-    if reduction == "sum":
-        return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+    kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     if reduction == "mean":
-        return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
-    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return kl_div / mu.numel()
+    return kl_div
 
 def cyclic_annealing(batch_iteration, cycle_length, min_beta=0.0, max_beta=1.0, ceil_downswings=True, floor_upswings=False):
     """
@@ -136,3 +135,24 @@ class BatchPCC:
         variance_y = (self.sum_y2 / self.n) - (mean_y ** 2)
         pcc = covariance / torch.sqrt(torch.tensor(variance_x * variance_y))
         return pcc
+    
+class MetricTracker:
+    
+    def __init__(self):
+        self.metrics = {}
+        self.reset()
+        
+    def reset(self):
+        self.iteration = 0
+        for key in self.metrics:
+            self.metrics[key] = 0
+    
+    def update(self, update: dict):
+        """
+        Updates metrics and should only be called once per iteration
+        """
+        self.iteration += 1
+        for key, value in update.items():
+            if key not in self.metrics:
+                self.metrics[key] = 0
+            self.metrics[key] += value

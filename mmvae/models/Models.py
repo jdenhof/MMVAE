@@ -23,20 +23,25 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.mean = mean
-        self.var = var
+        self.fc_mean = mean
+        self.fc_var = var
         
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.encoder(x)
+        return self.fc_mean(x), self.fc_var(x)
+    
+    def decode(self, x: torch.Tensor) -> torch.Tensor:
+        return self.decoder(x)
+    
     def reparameterize(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
-        return mu + std*eps
+        return mu + eps*std
 
     def forward(self, x: torch.Tensor) -> Tuple[Union[Any, torch.Tensor], Any, Any, Tuple[Any]]:
         
-        x = self.encoder(x)
-        mu = self.mean(x) 
-        log_var = self.var(x)
+        mu, log_var = self.encode(x)
+        z = self.reparameterize(mu, log_var)
+        x = self.decode(z)
         
-        x = self.reparameterize(mu, log_var)
-        x = self.decoder(x)
-        return x, mu, log_var
+        return x, mu, log_var, z 

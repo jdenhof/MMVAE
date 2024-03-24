@@ -1,4 +1,4 @@
-from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService
+from torchdata.dataloader2 import DataLoader2, MultiProcessingReadingService, ReadingServiceInterface
 from typing import Generator, Any
 import mmvae.data.pipes as p
 import torch
@@ -40,10 +40,6 @@ class MultiModalLoader:
                     return
                 del loaders[loader_idx]
 
-def worker_init_fn(DataPipe, WorkerInfo):
-    print(DataPipe, WorkerInfo, flush=True)
-    os.environ['WORKER_ID'] = str(WorkerInfo.worker_id)
-    return DataPipe
 class ChunkedCellCensusDataLoader(DataLoader2):
     """
         Dataloader wrapper for CellCensusPipeline
@@ -58,44 +54,44 @@ class ChunkedCellCensusDataLoader(DataLoader2):
          Attention:
           - num_workers must be greater or equal to the total chunks to load
         """
-    def __init__(self, *args, directory_path: str = None, masks: list[str] = None, batch_size: int = None, num_workers: int = None): # type: ignore
+    def __init__(self, directory_path: str = None, masks: list[str] = None, batch_size: int = None, num_workers: int = None, name=None): # type: ignore
         super(ChunkedCellCensusDataLoader, self).__init__(
-            datapipe=p.CellCensusPipeLine(*args, directory_path=directory_path, masks=masks, batch_size=batch_size), # type: ignore
+            datapipe=p.CellCensusPipeLine(directory_path, masks, batch_size, name=name), # type: ignore
             datapipe_adapter_fn=None,
-            reading_service=MultiProcessingReadingService(num_workers=num_workers, worker_init_fn=worker_init_fn, worker_prefetch_cnt=1)
+            reading_service=MultiProcessingReadingService(num_workers=num_workers)
         )
         
 def configure_multichunk_dataloaders(
-    batch_size,
-    directory_path="/active/debruinz_project/human_data/python_data",
-    train_masks=[f'human_chunk_{key}.npz' for key in range(1, 7)],
-    test_masks=[f'human_chunk_{key}.npz' for key in range(80, 86)],
-    test_batch_size=None,
+    train_batch_size: int,
+    train_directory_path: str,
+    train_masks: list[str],
+    test_batch_size: int,
+    test_directory_path: str,
+    test_masks: list[str]
 ) -> tuple[ChunkedCellCensusDataLoader, ChunkedCellCensusDataLoader]:
     """
     Returns tuple of (train_dataset, test_dataset).
     """
-    if test_batch_size == None:
-        test_batch_size = batch_size
         
-    if batch_size <= 0 or test_batch_size <= 0:
+    if train_batch_size <= 0 or test_batch_size <= 0:
         raise RuntimeError("Train and test batchsizes must be greater than 0!")
         
     return (
         ChunkedCellCensusDataLoader(
-            directory_path=directory_path, 
+            directory_path=train_directory_path, 
             masks=train_masks, 
-            batch_size=batch_size, 
-            num_workers=3
+            batch_size=train_batch_size, 
+            num_workers=4,
+            name='train',
         ),
         ChunkedCellCensusDataLoader(
-            directory_path=directory_path,
+            directory_path=test_directory_path,
             masks=test_masks, 
             batch_size=test_batch_size, 
-            num_workers=3
+            num_workers=4,
+            name='test',
         ),
     )
-    
         
 import mmvae.data.utils as utils
 def configure_singlechunk_dataloaders(

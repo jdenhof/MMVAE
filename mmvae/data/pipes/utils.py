@@ -1,6 +1,6 @@
 import torch
 from torchdata.datapipes import iter, functional_datapipe
-import os
+
 @functional_datapipe("attach_to_output")
 class AttachToOutput(iter.IterDataPipe):
     """
@@ -35,8 +35,6 @@ class SparseCSRMatrixBatcherDataPipe(iter.IterDataPipe):
 
     def __iter__(self):
         for sparse_matrix in self.source_datapipe:
-            worker_id = os.getenv('WORKER_ID', '0')
-            print("Batcher: ", worker_id, flush=True)
             drop = 0 if self.drop_last else -self.batch_size
             for i in range(0, sparse_matrix.shape[0] - drop, self.batch_size):
                 batch = sparse_matrix[i:i + self.batch_size]
