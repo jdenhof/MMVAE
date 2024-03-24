@@ -80,6 +80,7 @@ class HumanVAETrainer(HPBaseTrainer):
             self.hparams['data.test.batch_size'],
             self.hparams['data.test.directory'],
             generate_masks('test'),
+            verbose=False,
         )
         
     def configure_optimizers(self):

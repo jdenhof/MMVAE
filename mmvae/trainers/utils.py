@@ -147,6 +147,9 @@ class MetricTracker:
         for key in self.metrics:
             self.metrics[key] = 0
     
+    def __getitem__(self, key):
+        return self.metrics[key]
+    
     def update(self, update: dict):
         """
         Updates metrics and should only be called once per iteration

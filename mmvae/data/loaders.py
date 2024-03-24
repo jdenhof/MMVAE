@@ -54,9 +54,9 @@ class ChunkedCellCensusDataLoader(DataLoader2):
          Attention:
           - num_workers must be greater or equal to the total chunks to load
         """
-    def __init__(self, directory_path: str = None, masks: list[str] = None, batch_size: int = None, num_workers: int = None, name=None): # type: ignore
+    def __init__(self, directory_path: str = None, masks: list[str] = None, batch_size: int = None, num_workers: int = None, name=None, verbose=False): # type: ignore
         super(ChunkedCellCensusDataLoader, self).__init__(
-            datapipe=p.CellCensusPipeLine(directory_path, masks, batch_size, name=name), # type: ignore
+            datapipe=p.CellCensusPipeLine(directory_path, masks, batch_size, name=name, verbose=verbose), # type: ignore
             datapipe_adapter_fn=None,
             reading_service=MultiProcessingReadingService(num_workers=num_workers)
         )
@@ -67,7 +67,8 @@ def configure_multichunk_dataloaders(
     train_masks: list[str],
     test_batch_size: int,
     test_directory_path: str,
-    test_masks: list[str]
+    test_masks: list[str],
+    verbose=False
 ) -> tuple[ChunkedCellCensusDataLoader, ChunkedCellCensusDataLoader]:
     """
     Returns tuple of (train_dataset, test_dataset).
@@ -83,6 +84,7 @@ def configure_multichunk_dataloaders(
             batch_size=train_batch_size, 
             num_workers=4,
             name='train',
+            verbose=verbose
         ),
         ChunkedCellCensusDataLoader(
             directory_path=test_directory_path,
@@ -90,6 +92,7 @@ def configure_multichunk_dataloaders(
             batch_size=test_batch_size, 
             num_workers=4,
             name='test',
+            verbose=verbose
         ),
     )
         
