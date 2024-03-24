@@ -44,14 +44,14 @@ class ChunkloaderDataPipe(IterDataPipe):
         )
             
     
-def CellCensusPipeLine(directory_path: str, masks: list[str], batch_size: int, name="") -> IterDataPipe: # type: ignore
+def CellCensusPipeLine(directory_path: str, masks: list[str], batch_size: int, name="", verbose=False) -> IterDataPipe: # type: ignore
     """
     Pipeline built to load Cell Census sparse csr chunks. 
 
     Important Note: The sharding_filter is applied aftering opening files 
         to ensure no duplication of chunks between worker processes.
     """
-    pipe = (ChunkloaderDataPipe(directory_path, masks, name=name, verbose=True)
+    pipe = (ChunkloaderDataPipe(directory_path, masks, name=name, verbose=verbose)
         .sharding_round_robin_dispatch(SHARDING_PRIORITIES.MULTIPROCESSING) # Prevents chunks from being duplicated across workers
         .batch_sparse_csr_matrix(batch_size)
         .shuffle()
