@@ -41,11 +41,15 @@ class HumanMetricTracker:
         
     def log_trace_test_dataset_results(self):
         metrics = {}
-        metrics['Test/Loss/Reconstruction'] = self['recon_loss'] / self.test_metrics.iteration
+        # Record average reconstruction loss over entire dataset
+        metrics['Test/Loss/Reconstruction'] = self.test_metrics['recon_loss'] / self.test_metrics.iteration
+        # Record average kl loss over entire dataset
         metrics['Test/Loss/KL'] = self.test_metrics['kl_loss'] / self.test_metrics.iteration
+        # Write metrics and hparams to hparam file
         self.writer.add_hparams(dict(self.hparams), metrics, run_name=f"{self.hparams['tensorboard.run_name']}_hparams", global_step=self.hparams['epochs'])
     
     def log_trace_train_batch_results(self, kl_weight, batch_iteration, logging_interval=100):
+        # Log KL weight for each batch iteration
         self.writer.add_scalar('Metric/KLWeight', kl_weight, batch_iteration)
         iteration = self.train_metrics.iteration
         if iteration == logging_interval:
@@ -109,6 +113,16 @@ class HumanVAETrainer(HPBaseTrainer):
     #                          Trace Configuration                          #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
+    def get_kl_weight(self):
+        if self.batch_iteration < self.hparams['kl_cyclic.warm_start']:
+            return 0
+        return utils.cyclic_annealing(
+            self.batch_iteration, 
+            self.hparams['kl_cyclic.cycle_length'], 
+            min_beta=self.hparams['kl_cyclic.min_beta'], 
+            max_beta=self.hparams['kl_cyclic.max_beta']
+        )
+    
     def trace_expert_reconstruction(self, train_data: torch.Tensor, reduction="sum"):
         x_hat, mu, logvar, z = self.model(train_data)
         recon_loss = F.mse_loss(x_hat, train_data.to_dense(), reduction=reduction)
@@ -147,7 +161,7 @@ class HumanVAETrainer(HPBaseTrainer):
         xhat, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
 
         l1_penalty = torch.abs(z).sum()
-        loss: torch.Tensor = recon_loss + (kl_weight * kl_loss) + (l1_weight * l1_penalty)
+        loss: torch.Tensor = recon_loss + (kl_weight * kl_loss) # + (l1_weight * l1_penalty)
         
         loss.backward()
         
@@ -168,28 +182,31 @@ class HumanVAETrainer(HPBaseTrainer):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def train(self, epochs, load_snapshot=False):
+        # Initialize batch iteration to -1 to signal no batch
         self.batch_iteration = -1
+        # Training loop
         super().train(epochs, load_snapshot)
+        # Shutdown multiprocessing dataloaders
         self.train_loader.shutdown()
         self.test_loader.shutdown()
 
     def train_epoch(self, epoch):
+        # Set the seed for the training dataloader
         self.train_loader.seed(epoch)
+        # Make sure model will record grad
         self.model.train()
+        # Iterate over all samples in the trainig dataset
         for train_data in self.train_loader:
+            # Signal batch receivied index at 0
             self.batch_iteration += 1
+            # Send training data to gpu
             train_data = train_data.to(self.device)
-            kl_weight = 0 if self.batch_iteration < self.hparams['kl_cyclic.warm_start'] \
-                else utils.cyclic_annealing(
-                    self.batch_iteration, self.hparams['kl_cyclic.cycle_length'], 
-                    min_beta=self.hparams['kl_cyclic.min_beta'], max_beta=self.hparams['kl_cyclic.max_beta'])
-            self.trace_train_batch(train_data, kl_weight)
-            
+            self.trace_train_batch(train_data)
+            # Step for all schedulars
+            for schedular in self.schedulers.values():
+                schedular.step()
         self.trace_test_dataset(epoch)
-        
-        for schedular in self.schedulers.values():
-            schedular.step()
-        
-        self.hparams['epochs'] +=1
+        # Set new epoch completion 
+        self.hparams['epochs'] = epoch
             
     
