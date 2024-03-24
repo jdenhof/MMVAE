@@ -66,10 +66,10 @@ class HumanVAETrainer(BaseTrainer):
 
         # Forwad Pass Over Entire Model
         x_hat, mu, var = self.model(train_data)
-        recon_loss = F.MSE(x_hat, train_data.to_dense(),
-                           reduction=None).sum(dim=1).mean()
+        recon_loss = F.mse_loss(x_hat, train_data.to_dense(), reduction='sum')
+        
         # Shared VAE Loss
-        kl_loss = utils.kl_divergence(mu, var, reduction="mean")
+        kl_loss = utils.kl_divergence(mu, var, reduction="sum")
         kl_weight = min(1.0, epoch / self.annealing_steps)
         loss = recon_loss + (kl_loss * kl_weight)
         loss.backward()

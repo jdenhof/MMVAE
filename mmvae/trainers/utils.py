@@ -14,6 +14,8 @@ def kl_divergence(mu, logvar, reduction="sum"):
     - torch.Tensor: The KL divergence.
     """
     if reduction == "sum":
-        return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+        return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        # return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
     if reduction == "mean":
-        return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
+        return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
+        # return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
