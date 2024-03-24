@@ -159,7 +159,7 @@ class HumanVAETrainer(HPBaseTrainer):
             'recon_loss': recon_loss.detach().item() / xhat.numel(),
             'kl_loss':  kl_loss.detach().item() / z.numel(),
             'loss': loss.detach().item() / xhat.numel(),
-            'l1_penalty': l1_penalty
+            'l1_penalty': l1_penalty.item()
         })
         self.metric_tracker.log_trace_train_batch_results(kl_weight, self.batch_iteration)
     
