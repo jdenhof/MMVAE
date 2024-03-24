@@ -139,13 +139,11 @@ class BatchPCC:
 class MetricTracker:
     
     def __init__(self):
-        self.metrics = {}
         self.reset()
         
     def reset(self):
         self.iteration = 0
-        for key in self.metrics:
-            self.metrics[key] = 0
+        self.metrics = {}
     
     def __getitem__(self, key):
         return self.metrics[key]

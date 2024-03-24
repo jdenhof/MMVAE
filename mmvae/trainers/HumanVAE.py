@@ -48,10 +48,11 @@ class HumanMetricTracker:
     def log_trace_train_batch_results(self, kl_weight, batch_iteration, logging_interval=100):
         self.writer.add_scalar('Metric/KLWeight', kl_weight, batch_iteration)
         iteration = self.train_metrics.iteration
-        if iteration % logging_interval == 0:
+        if iteration == logging_interval:
             self.writer.add_scalar('Train/Loss/Recon', self.train_metrics['recon_loss'] / iteration, batch_iteration)
             self.writer.add_scalar('Train/Loss/Total', self.train_metrics['loss'] / iteration, batch_iteration)
             self.writer.add_scalar('Train/Loss/KL', self.train_metrics['kl_loss'] / iteration, batch_iteration)
+            self.writer.add_scalar('Train/Metrics/L1Penalty', self.train_metrics['l1_penalty'] / iteration, batch_iteration)
             self.train_metrics.reset()
         
 class HumanVAETrainer(HPBaseTrainer):
@@ -143,7 +144,7 @@ class HumanVAETrainer(HPBaseTrainer):
         self.optimizers['expert.encoder'].zero_grad()
         self.optimizers['expert.decoder'].zero_grad()
         
-        _, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
+        xhat, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
 
         l1_penalty = torch.abs(z).sum()
         loss: torch.Tensor = recon_loss + (kl_weight * kl_loss) + (l1_weight * l1_penalty)
@@ -155,9 +156,9 @@ class HumanVAETrainer(HPBaseTrainer):
         self.optimizers['expert.decoder'].step()
         
         self.metric_tracker.train_metrics.update({
-            'recon_loss': recon_loss,
-            'kl_loss': kl_loss,
-            'loss': loss,
+            'recon_loss': recon_loss.detach().item() / xhat.numel(),
+            'kl_loss':  kl_loss.detach().item() / z.numel(),
+            'loss': loss.detach().item() / xhat.numel(),
             'l1_penalty': l1_penalty
         })
         self.metric_tracker.log_trace_train_batch_results(kl_weight, self.batch_iteration)
