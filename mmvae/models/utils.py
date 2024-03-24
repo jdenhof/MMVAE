@@ -11,7 +11,12 @@ def _submodules_init_weights_xavier_uniform_(module: nn.Module, bias = None):
 def _xavier_uniform_(module: nn.Module, bias = 0.0):
     if isinstance(module, nn.Linear):
         nn.init.xavier_uniform_(module.weight)
-        nn.init.constant_(module.bias, bias)
+        nn.init.constant_(module.bias ,bias)
+
+def init_kaiming_normal(module: nn.Module):
+    if isinstance(module, nn.Linear):
+        nn.init.kaiming_normal_(module.weight)
+        nn.init.constant_(module.bias, 0)
 
 def parameterize_returns(results):
     if isinstance(results, tuple):

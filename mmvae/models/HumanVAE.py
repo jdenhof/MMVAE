@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import mmvae.models as M
+import mmvae.models.utils as utils
 
 class HumanExpert(M.Expert):
     
@@ -87,9 +88,13 @@ class Model(nn.Module):
         return x, mu, logvar, z
     
 def configure_model(trainer) -> Model:
-    return Model(
+    model = Model(
             HumanExpert(512, 256),
             HumanVAE(256, 128, 32),
-        ).to(trainer.device)
+        )
+    if trainer.hparams['init_weights']:
+        model.apply(utils.init_kaiming_normal)
+    
+    return model.to(trainer.device)
 
         
