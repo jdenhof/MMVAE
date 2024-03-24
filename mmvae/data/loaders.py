@@ -82,7 +82,7 @@ def configure_multichunk_dataloaders(
             directory_path=train_directory_path, 
             masks=train_masks, 
             batch_size=train_batch_size, 
-            num_workers=4,
+            num_workers=2,
             name='train',
             verbose=verbose
         ),
@@ -90,7 +90,7 @@ def configure_multichunk_dataloaders(
             directory_path=test_directory_path,
             masks=test_masks, 
             batch_size=test_batch_size, 
-            num_workers=4,
+            num_workers=2,
             name='test',
             verbose=verbose
         ),
