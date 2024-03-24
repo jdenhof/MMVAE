@@ -47,11 +47,12 @@ class HumanMetricTracker:
     
     def log_trace_train_batch_results(self, kl_weight, batch_iteration, logging_interval=100):
         self.writer.add_scalar('Metric/KLWeight', kl_weight, batch_iteration)
-        if self.train_metrics.iteration % logging_interval == 0:
-            self.writer.add_scalar('Train/Loss/Recon', self.train_metrics['recon_loss'] / self.train_metrics.iteration, batch_iteration)
-            self.writer.add_scalar('Train/Loss/Total', self.train_metrics['loss'] / self.train_metrics.iteration, batch_iteration)
-            self.writer.add_scalar('Train/Loss/KL', self.train_metrics['kl_loss'] / self.train_metrics.iteration, batch_iteration)
-            self.test_metrics.reset()
+        iteration = self.train_metrics.iteration
+        if iteration % logging_interval == 0:
+            self.writer.add_scalar('Train/Loss/Recon', self.train_metrics['recon_loss'] / iteration, batch_iteration)
+            self.writer.add_scalar('Train/Loss/Total', self.train_metrics['loss'] / iteration, batch_iteration)
+            self.writer.add_scalar('Train/Loss/KL', self.train_metrics['kl_loss'] / iteration, batch_iteration)
+            self.train_metrics.reset()
         
 class HumanVAETrainer(HPBaseTrainer):
     
