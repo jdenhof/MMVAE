@@ -46,7 +46,7 @@ class HumanMetricTracker:
         self.metrics['Test/Loss/ZeroFeatureReconstruction'] += F.mse_loss(inputs[zero_mask], targets[zero_mask], reduction='sum') 
         
     def log_trace_test_dataset_results(self, epoch = None):
-        if epoch:
+        if epoch is not None:
             self.hparams['epochs'] = epoch
         metrics = {}
         # Record average reconstruction loss over entire dataset
