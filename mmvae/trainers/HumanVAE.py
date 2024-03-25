@@ -204,8 +204,8 @@ class HumanVAETrainer(HPBaseTrainer):
             self.trace_train_batch(train_data)
             current_lr = self.scheduler.get_last_lr()[0]
             self.writer.add_scalar('Metric/LearningRate', current_lr, global_step=self.batch_iteration)
-            if lr_stop > current_lr and self.batch_iteration % self.hparams['schedular.step_size'] == 0:
-                self.scheduler.step()
+        if lr_stop < current_lr:
+            self.scheduler.step()
         
         self.trace_test_dataset(epoch)
         # Set new epoch completion 
