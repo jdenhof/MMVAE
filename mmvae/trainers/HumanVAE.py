@@ -100,7 +100,7 @@ class HumanVAETrainer(HPBaseTrainer):
         if 'schedular.gamma' in self.hparams:
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
                 self.optimizer, 
-                gamma=self.hparams['schedular.gamma'],
+                gamma=self.hparams['schedular.gamma']
         )
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -202,11 +202,11 @@ class HumanVAETrainer(HPBaseTrainer):
             # Send training data to gpu
             train_data = train_data.to(self.device)
             self.trace_train_batch(train_data)
-            current_lr = self.scheduler.get_last_lr()[0]  # get_last_lr returns a list
-            if current_lr < lr_stop:
-                self.scheduler.step()
+            current_lr = self.scheduler.get_last_lr()[0]
             self.writer.add_scalar('Metric/LearningRate', current_lr, global_step=self.batch_iteration)
-                
+            if lr_stop > current_lr and self.batch_iteration % self.hparams['schedular.step_size'] == 0:
+                self.scheduler.step()
+        
         self.trace_test_dataset(epoch)
         # Set new epoch completion 
         self.hparams['epochs'] = epoch
