@@ -98,10 +98,9 @@ class HumanVAETrainer(HPBaseTrainer):
         
     def configure_schedulers(self) -> dict[str, LRScheduler]:
         return { 
-                key: torch.optim.lr_scheduler.StepLR(
-                    optimizer, 
-                    step_size=self.hparams[f'{key}.optimizer.schedular.step_size'], 
-                    gamma=self.hparams[f"{key}.optimizer.schedular.gamma"])
+                key: torch.optim.lr_scheduler.LambdaLR(
+                    optimizer,
+                    lr_lambda=lambda batch: self.hparams[f'{key}.optimizer.schedular.gamma'] ** (batch // self.hparams['{key}.optimizer.schedular.step_size']))
                 for key, optimizer in self.optimizers.items() 
                 if f'{key}.optimizer.schedular.step_size' in self.hparams 
                     and self.hparams[f'{key}.optimizer.schedular.step_size'] != "" 
