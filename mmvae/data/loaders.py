@@ -68,7 +68,9 @@ def configure_multichunk_dataloaders(
     test_batch_size: int,
     test_directory_path: str,
     test_masks: list[str],
-    verbose=False
+    train_num_workers: int = 2,
+    test_num_workers: int = 2,
+    verbose: bool =False
 ) -> tuple[ChunkedCellCensusDataLoader, ChunkedCellCensusDataLoader]:
     """
     Returns tuple of (train_dataset, test_dataset).
@@ -76,13 +78,16 @@ def configure_multichunk_dataloaders(
         
     if train_batch_size <= 0 or test_batch_size <= 0:
         raise RuntimeError("Train and test batchsizes must be greater than 0!")
-        
+    if len(train_masks) < train_num_workers:
+        train_num_workers = len(train_masks)
+    if len(test_masks) < test_num_workers:
+        test_num_workers = len(test_masks)
     return (
         ChunkedCellCensusDataLoader(
             directory_path=train_directory_path, 
             masks=train_masks, 
             batch_size=train_batch_size, 
-            num_workers=2,
+            num_workers=train_num_workers,
             name='train',
             verbose=verbose
         ),
@@ -90,7 +95,7 @@ def configure_multichunk_dataloaders(
             directory_path=test_directory_path,
             masks=test_masks, 
             batch_size=test_batch_size, 
-            num_workers=2,
+            num_workers=test_num_workers,
             name='test',
             verbose=verbose
         ),
