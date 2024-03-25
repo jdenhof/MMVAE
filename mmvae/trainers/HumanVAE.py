@@ -229,7 +229,7 @@ class HumanVAETrainer(HPBaseTrainer):
             self.metric_tracker.log_learning_rate(self.batch_iteration, self.scheduler)
             # Decrease learning rate if greater than stop condition
             if (self.batch_iteration % self.hparams['schedular.step_size'] == 0) and self.hparams['schedular.stop'] < self.scheduler.get_last_lr()[0]:
-                self.scheduler.step(epoch)
+                self.scheduler.step()
         # Run test trace
         self.trace_test_dataset(epoch)
             
