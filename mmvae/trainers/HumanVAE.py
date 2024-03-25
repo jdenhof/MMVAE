@@ -101,7 +101,6 @@ class HumanVAETrainer(HPBaseTrainer):
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
                 self.optimizer, 
                 gamma=self.hparams['schedular.gamma'],
-                last_epoch=0
         )
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
