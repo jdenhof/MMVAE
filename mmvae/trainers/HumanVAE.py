@@ -56,7 +56,7 @@ class HumanMetricTracker:
             self.writer.add_scalar('Train/Loss/Recon', self.train_metrics['recon_loss'] / iteration, batch_iteration)
             self.writer.add_scalar('Train/Loss/Total', self.train_metrics['loss'] / iteration, batch_iteration)
             self.writer.add_scalar('Train/Loss/KL', self.train_metrics['kl_loss'] / iteration, batch_iteration)
-            self.writer.add_scalar('Train/Metrics/L1Penalty', self.train_metrics['l1_penalty'] / iteration, batch_iteration)
+            #self.writer.add_scalar('Train/Metrics/L1Penalty', self.train_metrics['l1_penalty'] / iteration, batch_iteration)
             self.train_metrics.reset()
         
 class HumanVAETrainer(HPBaseTrainer):
