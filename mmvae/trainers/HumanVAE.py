@@ -22,10 +22,10 @@ class HumanVAEConfig(BaseTrainerConfig):
         'expert.encoder.optimizer.lr': float,
         'expert.decoder.optimizer.lr': float, 
         'shr_vae.optimizer.lr': float, 
-        'kl_cyclic.warm_start': float, 
-        'kl_cyclic.cycle_length': float, 
-        'kl_cyclic.min_beta': float, 
-        'kl_cyclic.max_beta': float 
+        'kl_weight.warm_start': float, 
+        'kl_weight.cycle_length': float, 
+        'kl_weight.min_beta': float, 
+        'kl_weight.max_beta': float 
     }
             
 class HumanMetricTracker:
@@ -39,7 +39,15 @@ class HumanMetricTracker:
     def log_architecture(self, model):
         self.writer.add_text('Model Architecture', str(model))
         
-    def log_trace_test_dataset_results(self):
+    def log_non_zero_and_zero_reconstruction(self, inputs, targets):
+        non_zero_mask = inputs != 0
+        self.metrics['Test/Loss/NonZeroFeatureReconstruction'] += F.mse_loss(inputs[non_zero_mask], targets[non_zero_mask], reduction='sum') 
+        zero_mask = ~non_zero_mask
+        self.metrics['Test/Loss/ZeroFeatureReconstruction'] += F.mse_loss(inputs[zero_mask], targets[zero_mask], reduction='sum') 
+        
+    def log_trace_test_dataset_results(self, epoch = None):
+        if epoch:
+            self.hparams['epochs'] = epoch
         metrics = {}
         # Record average reconstruction loss over entire dataset
         metrics['Test/Loss/Reconstruction'] = self.test_metrics['recon_loss'] / self.test_metrics.iteration
@@ -58,6 +66,10 @@ class HumanMetricTracker:
             self.writer.add_scalar('Train/Loss/KL', self.train_metrics['kl_loss'] / iteration, batch_iteration)
             #self.writer.add_scalar('Train/Metrics/L1Penalty', self.train_metrics['l1_penalty'] / iteration, batch_iteration)
             self.train_metrics.reset()
+    
+    def log_learning_rate(self, batch_iteration, scheduler):
+        current_lr = scheduler.get_last_lr()[0]
+        self.writer.add_scalar('Metric/LearningRate', current_lr, global_step=batch_iteration)
         
 class HumanVAETrainer(HPBaseTrainer):
     
@@ -88,6 +100,7 @@ class HumanVAETrainer(HPBaseTrainer):
             generate_masks('test'),
             verbose=False,
         )
+        return (self.train_loader, self.test_loader)
         
     def configure_optimizers(self):
         self.optimizer = torch.optim.Adam([
@@ -102,78 +115,88 @@ class HumanVAETrainer(HPBaseTrainer):
                 self.optimizer, 
                 gamma=self.hparams['schedular.gamma']
         )
-        
+    
+    def get_kl_weight(self):
+        if self.hparams['kl_weight.function'] in ('linear_ramp_plateau', 'lrp'):
+            return utils.linear_ramp_plateau(
+                self.batch_iteration, 
+                self.hparams['kl_weight.min_beta'], 
+                self.hparams['kl_weight.max_beta'], 
+                self.hparams['kl_weight.cycle_length'], 
+                self.hparams['kl_weight.warm_start']
+            )
+        if self.hparams['kl_weight.function'] in ('cycle', 'cyclic'):
+            warm_start = self.hparams['kl_weight.warm_start']
+            if self.batch_iteration < warm_start:
+                return 0
+            return utils.cyclic_annealing(
+                (self.batch_iteration - warm_start), 
+                self.hparams['kl_weight.cycle_length'], 
+                min_beta=self.hparams['kl_weight.min_beta'], 
+                max_beta=self.hparams['kl_weight.max_beta']
+            )
+            
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     #                          Trace Configuration                          #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
-    def get_kl_weight(self):
-        return utils.linear_ramp_plateau(
-            self.batch_iteration, 
-            self.hparams['kl_cyclic.min_beta'], 
-            self.hparams['kl_cyclic.max_beta'], 
-            self.hparams['kl_cyclic.cycle_length'], 
-            self.hparams['kl_cyclic.warm_start']
-        )
-        warm_start = self.hparams['kl_cyclic.warm_start']
-        if self.batch_iteration < warm_start:
-            return 0
-        return utils.cyclic_annealing(
-            (self.batch_iteration - warm_start), 
-            self.hparams['kl_cyclic.cycle_length'], 
-            min_beta=self.hparams['kl_cyclic.min_beta'], 
-            max_beta=self.hparams['kl_cyclic.max_beta']
-        )
-    
-    def trace_expert_reconstruction(self, train_data: torch.Tensor, reduction="sum"):
-        x_hat, mu, logvar, z = self.model(train_data)
-        recon_loss = F.mse_loss(x_hat, train_data.to_dense(), reduction=reduction)
+    def trace_expert_reconstruction(self, data: torch.Tensor, reduction="sum"):
+        # Run data through model
+        x_hat, mu, logvar, z = self.model(data)
+        # Calculate reconstruction loss ~ reduction: training|testing : sum|mean
+        recon_loss = F.mse_loss(x_hat, data.to_dense(), reduction=reduction)
+        # Calculate kl loss ~ reduction: training|testing : sum|mean
         kl_loss = utils.kl_divergence(mu, logvar, reduction=reduction)
         return x_hat, z, mu, logvar, recon_loss, kl_loss
     
-    def log_non_zero_and_zero_reconstruction(self, inputs, targets):
-        non_zero_mask = inputs != 0
-        self.metrics['Test/Loss/NonZeroFeatureReconstruction'] += F.mse_loss(inputs[non_zero_mask], targets[non_zero_mask], reduction='sum') 
-        zero_mask = ~non_zero_mask
-        self.metrics['Test/Loss/ZeroFeatureReconstruction'] += F.mse_loss(inputs[zero_mask], targets[zero_mask], reduction='sum') 
-    
     def trace_test_dataset(self, epoch):
+        # Seed test dataloader
         self.test_loader.seed(epoch)
+        # Reset test metrics
         self.metric_tracker.test_metrics.reset()
+        # Ensure no gradients are being computed
         with torch.no_grad():
+            # Make sure parameters of model are not being updated
             self.model.eval()
             for test_data in self.test_loader:
+                # Send test data to gpu
                 test_data = test_data.to(self.device)
+                # Trace over model with mean reduction
                 _, _, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(test_data, reduction='mean')
+                # Convert torch.Tensor to Number
                 recon_loss, kl_loss = recon_loss.item(), kl_loss.item()
-                loss = recon_loss + kl_loss
+                # Update test metrics for iteration
                 self.metric_tracker.test_metrics.update({
                     'recon_loss': recon_loss,
                     'kl_loss': kl_loss,
-                    'loss': loss
+                    'loss': recon_loss + kl_loss
                 })
-        self.metric_tracker.log_trace_test_dataset_results()
+        # Log test metrics
+        self.metric_tracker.log_trace_test_dataset_results(epoch)
         
     def trace_train_batch(self, train_data: torch.Tensor):
-        
+        # Zero optimizers
         self.optimizer.zero_grad()
-        
+        # Trace model 
         xhat, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
-
-        #l1_penalty = torch.abs(z).sum()
+        # Calculate L1 Penalty
+        l1_penalty = torch.abs(z).sum()
+        # Get kl_weight for epoch
         kl_weight = self.get_kl_weight()
-        loss: torch.Tensor = recon_loss + (kl_weight* kl_loss) #+ (kl_weight * l1_penalty)
-        
+        # Calculate loss
+        loss: torch.Tensor = recon_loss + (kl_weight* kl_loss) # + (kl_weight * l1_penalty)
+        # Compute autograd graph
         loss.backward()
-        
+        # Update gradients
         self.optimizer.step()
-        
+        # Update metrics from training
         self.metric_tracker.train_metrics.update({
             'recon_loss': recon_loss.detach().item() / xhat.numel(),
             'kl_loss':  kl_loss.detach().item() / z.numel(),
             'loss': loss.detach().item() / xhat.numel(),
-            #'l1_penalty': l1_penalty.item()
+            'l1_penalty': l1_penalty.item()
         })
+        # Log metrics from training
         self.metric_tracker.log_trace_train_batch_results(kl_weight, self.batch_iteration)
     
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -181,34 +204,33 @@ class HumanVAETrainer(HPBaseTrainer):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def train(self, epochs, load_snapshot=False):
-        # Initialize batch iteration to -1 to signal no batch
+        # Batch iteration not started
         self.batch_iteration = -1
-        self.hparams['epochs'] = 0
         # Training loop
         super().train(epochs, load_snapshot)
         # Shutdown multiprocessing dataloaders
-        self.train_loader.shutdown()
-        self.test_loader.shutdown()
+        for dataloader in self.dataloader:
+            dataloader.shutdown()
 
     def train_epoch(self, epoch):
-        self.hparams['epochs'] = epoch
         # Set the seed for the training dataloader
         self.train_loader.seed(epoch)
         # Make sure model will record grad
         self.model.train()
-        lr_stop = self.hparams['schedular.stop']
         # Iterate over all samples in the trainig dataset
         for train_data in self.train_loader:
             # Signal batch receivied index at 0
             self.batch_iteration += 1
             # Send training data to gpu
             train_data = train_data.to(self.device)
+            # Run training iteration
             self.trace_train_batch(train_data)
-            current_lr = self.scheduler.get_last_lr()[0]
-            self.writer.add_scalar('Metric/LearningRate', current_lr, global_step=self.batch_iteration)
-        if lr_stop < current_lr:
-            self.scheduler.step()
-        
+            # Log learning rate
+            self.metric_tracker.log_learning_rate(self.batch_iteration, self.scheduler)
+        # Decrease learning rate if greater than stop condition
+        if self.hparams['schedular.stop'] < self.scheduler.get_last_lr()[0]:
+            self.scheduler.step(epoch)
+        # Run test trace
         self.trace_test_dataset(epoch)
             
     

@@ -190,3 +190,4 @@ def linear_ramp_plateau(batch_iteration: int, min_beta: float, max_beta: float, 
         return min_beta + (max_beta - min_beta) * progress
     # Once max_beta is reached, stay there
     return max_beta
+
