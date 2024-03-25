@@ -91,9 +91,9 @@ class HumanVAETrainer(HPBaseTrainer):
         
     def configure_optimizers(self):
         self.optimizer = torch.optim.Adam([
-            { 'params': self.model.expert.encoder.parameters(), 'lr': self.hparams['expert.encoder.optimizer.lr'] },
-            { 'params': self.model.expert.decoder.parameters(), 'lr': self.hparams['expert.decoder.optimizer.lr'] },
-            { 'params': self.model.shared_vae.encoder.parameters(), 'lr': self.hparams['shr_vae.optimizer.lr'] }
+            { 'params': self.model.expert.encoder.parameters(), 'inital_lr': self.hparams['expert.encoder.optimizer.lr'] },
+            { 'params': self.model.expert.decoder.parameters(), 'inital_lr': self.hparams['expert.decoder.optimizer.lr'] },
+            { 'params': self.model.shared_vae.encoder.parameters(), 'inital_lr': self.hparams['shr_vae.optimizer.lr'] }
         ])
         
     def configure_schedulers(self) -> dict[str, LRScheduler]:
