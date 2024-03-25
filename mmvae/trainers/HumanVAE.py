@@ -97,16 +97,10 @@ class HumanVAETrainer(HPBaseTrainer):
         ])
         
     def configure_schedulers(self) -> dict[str, LRScheduler]:
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer, 
-            lr_lambda=[
-                lambda batch: self.hparams[f'{key}.optimizer.schedular.gamma'] ** (batch // self.hparams[f'{key}.optimizer.schedular.step_size'])
-                for key in ('expert.encoder', 'expert.decoder', 'shr_vae')
-                if f'{key}.optimizer.schedular.step_size' in self.hparams 
-                    and self.hparams[f'{key}.optimizer.schedular.step_size'] != "" 
-                    and f'{key}.optimizer.schedular.gamma' in self.hparams
-                    and self.hparams[f'{key}.optimizer.schedular.gamma'] != ""
-            ]
+        if 'schedular.gamma' in self.hparams:
+            self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
+                self.optimizer, 
+                gamma=self.hparams['schedular.gamma']
         )
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -114,6 +108,13 @@ class HumanVAETrainer(HPBaseTrainer):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
     def get_kl_weight(self):
+        return utils.linear_ramp_plateau(
+            self.batch_iteration, 
+            self.hparams['kl_cyclic.min_beta'], 
+            self.hparams['kl_cyclic.max_beta'], 
+            self.hparams['kl_cyclic.cycle_length'], 
+            self.hparams['kl_cyclic.warm_start']
+        )
         warm_start = self.hparams['kl_cyclic.warm_start']
         if self.batch_iteration < warm_start:
             return 0
@@ -193,6 +194,7 @@ class HumanVAETrainer(HPBaseTrainer):
         self.train_loader.seed(epoch)
         # Make sure model will record grad
         self.model.train()
+        lr_stop = self.hparams['schedular.stop']
         # Iterate over all samples in the trainig dataset
         for train_data in self.train_loader:
             # Signal batch receivied index at 0
@@ -200,7 +202,11 @@ class HumanVAETrainer(HPBaseTrainer):
             # Send training data to gpu
             train_data = train_data.to(self.device)
             self.trace_train_batch(train_data)
-            self.scheduler.step()
+            current_lr = self.scheduler.get_last_lr()[0]  # get_last_lr returns a list
+            if current_lr < lr_stop:
+                self.scheduler.step()
+            self.writer.add_scalar('Metric/LearningRate', current_lr, global_step=self.batch_iteration)
+                
         self.trace_test_dataset(epoch)
         # Set new epoch completion 
         self.hparams['epochs'] = epoch

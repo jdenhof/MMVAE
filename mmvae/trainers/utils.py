@@ -1,4 +1,5 @@
 import torch
+import math
 
 def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor, reduction=None):
     """
@@ -157,3 +158,35 @@ class MetricTracker:
             if key not in self.metrics:
                 self.metrics[key] = 0
             self.metrics[key] += value
+            
+def get_lr_schedular(lr_initial: float, lr_final: float, total_iterations: int):
+    k = -(1/total_iterations) * math.log(lr_final / (lr_initial-lr_final))
+    # Lambda function for learning rate scheduler
+    return lambda t: (lr_final / lr_initial) + (1 - (lr_final / lr_initial)) * math.exp(-k * t)
+            
+
+def linear_ramp_plateau(batch_iteration: int, min_beta: float, max_beta: float, total_iterations: int, warm_start_iterations: int):
+    """
+        Returns the value of beta based on the batch_iteration, transitioning from min_beta to max_beta.
+
+        Parameters:
+        - batch_iteration: The current iteration in the batch process.
+        - min_beta: Starting value of beta.
+        - max_beta: Ending value of beta.
+        - total_iterations: Number of iterations to transition from min_beta to max_beta.
+        - warm_start_iterations: Number of iterations at the start during which beta remains at min_beta.
+
+        Returns:
+        - The current value of beta based on the batch_iteration.
+        """
+    # During warm_start, output is min_beta
+    if batch_iteration <= warm_start_iterations:
+        return min_beta
+    # Calculate current iteration after warm_start
+    adjusted_iteration = batch_iteration - warm_start_iterations
+    if adjusted_iteration <= total_iterations:
+        # Linearly interpolate between min_beta and max_beta based on adjusted_iteration
+        progress = adjusted_iteration / total_iterations
+        return min_beta + (max_beta - min_beta) * progress
+    # Once max_beta is reached, stay there
+    return max_beta
