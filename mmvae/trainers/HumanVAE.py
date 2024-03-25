@@ -114,10 +114,11 @@ class HumanVAETrainer(HPBaseTrainer):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     
     def get_kl_weight(self):
-        if self.batch_iteration < self.hparams['kl_cyclic.warm_start']:
+        warm_start = self.hparams['kl_cyclic.warm_start']
+        if self.batch_iteration < warm_start:
             return 0
         return utils.cyclic_annealing(
-            self.batch_iteration, 
+            (self.batch_iteration - warm_start), 
             self.hparams['kl_cyclic.cycle_length'], 
             min_beta=self.hparams['kl_cyclic.min_beta'], 
             max_beta=self.hparams['kl_cyclic.max_beta']
@@ -162,7 +163,7 @@ class HumanVAETrainer(HPBaseTrainer):
 
         l1_penalty = torch.abs(z).sum()
         kl_weight = self.get_kl_weight()
-        loss: torch.Tensor = recon_loss + (kl_weight* kl_loss) # + (l1_weight * l1_penalty)
+        loss: torch.Tensor = recon_loss + (kl_weight* kl_loss) + (kl_weight * l1_penalty)
         
         loss.backward()
         
