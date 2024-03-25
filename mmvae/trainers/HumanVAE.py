@@ -90,23 +90,24 @@ class HumanVAETrainer(HPBaseTrainer):
         )
         
     def configure_optimizers(self):
-        return {
-            'expert.encoder': torch.optim.Adam(self.model.expert.encoder.parameters(), lr=self.hparams['expert.encoder.optimizer.lr']),
-            'expert.decoder': torch.optim.Adam(self.model.expert.decoder.parameters(), lr=self.hparams['expert.decoder.optimizer.lr']),
-            'shr_vae': torch.optim.Adam(self.model.shared_vae.parameters(), lr=self.hparams['shr_vae.optimizer.lr']),
-        }
+        self.optimizer = torch.optim.Adam([
+            { 'params': self.model.expert.encoder.parameters(), 'lr': self.hparams['expert.encoder.optimizer.lr'] },
+            { 'params': self.model.expert.decoder.parameters(), 'lr': self.hparams['expert.decoder.optimizer.lr'] },
+            { 'params': self.model.shared_vae.encoder.parameters(), 'lr': self.hparams['shr_vae.optimizer.lr'] }
+        ])
         
     def configure_schedulers(self) -> dict[str, LRScheduler]:
-        return { 
-                key: torch.optim.lr_scheduler.LambdaLR(
-                    optimizer,
-                    lr_lambda=lambda batch: self.hparams[f'{key}.optimizer.schedular.gamma'] ** (batch // self.hparams[f'{key}.optimizer.schedular.step_size']))
-                for key, optimizer in self.optimizers.items() 
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+            self.optimizer, 
+            lr_lambda=[
+                lambda batch: self.hparams[f'{key}.optimizer.schedular.gamma'] ** (batch // self.hparams[f'{key}.optimizer.schedular.step_size'])
+                for key in ('expert.encoder', 'expert.decoder', 'shr_vae')
                 if f'{key}.optimizer.schedular.step_size' in self.hparams 
                     and self.hparams[f'{key}.optimizer.schedular.step_size'] != "" 
                     and f'{key}.optimizer.schedular.gamma' in self.hparams
                     and self.hparams[f'{key}.optimizer.schedular.gamma'] != ""
-            }
+            ]
+        )
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     #                          Trace Configuration                          #
@@ -154,9 +155,7 @@ class HumanVAETrainer(HPBaseTrainer):
         
     def trace_train_batch(self, train_data: torch.Tensor):
         
-        self.optimizers['shr_vae'].zero_grad()
-        self.optimizers['expert.encoder'].zero_grad()
-        self.optimizers['expert.decoder'].zero_grad()
+        self.optimizer.zero_grad()
         
         xhat, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
 
@@ -166,9 +165,7 @@ class HumanVAETrainer(HPBaseTrainer):
         
         loss.backward()
         
-        self.optimizers['shr_vae'].step()
-        self.optimizers['expert.encoder'].step()
-        self.optimizers['expert.decoder'].step()
+        self.optimizer.step()
         
         self.metric_tracker.train_metrics.update({
             'recon_loss': recon_loss.detach().item() / xhat.numel(),
@@ -203,9 +200,7 @@ class HumanVAETrainer(HPBaseTrainer):
             # Send training data to gpu
             train_data = train_data.to(self.device)
             self.trace_train_batch(train_data)
-            # Step for all schedulars
-            for schedular in self.schedulers.values():
-                schedular.step()
+            self.scheduler.step()
         self.trace_test_dataset(epoch)
         # Set new epoch completion 
         self.hparams['epochs'] = epoch
