@@ -152,7 +152,7 @@ class HumanVAETrainer(HPBaseTrainer):
                 })
         self.metric_tracker.log_trace_test_dataset_results()
         
-    def trace_train_batch(self, train_data: torch.Tensor, kl_weight: float = 1, l1_weight: float = 1, log_skip = 100):
+    def trace_train_batch(self, train_data: torch.Tensor):
         
         self.optimizers['shr_vae'].zero_grad()
         self.optimizers['expert.encoder'].zero_grad()
@@ -161,7 +161,8 @@ class HumanVAETrainer(HPBaseTrainer):
         xhat, z, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(train_data)
 
         l1_penalty = torch.abs(z).sum()
-        loss: torch.Tensor = recon_loss + (kl_weight * kl_loss) # + (l1_weight * l1_penalty)
+        kl_weight = self.get_kl_weight()
+        loss: torch.Tensor = recon_loss + (kl_weight* kl_loss) # + (l1_weight * l1_penalty)
         
         loss.backward()
         
