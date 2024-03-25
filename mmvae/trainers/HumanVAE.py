@@ -183,6 +183,7 @@ class HumanVAETrainer(HPBaseTrainer):
     def train(self, epochs, load_snapshot=False):
         # Initialize batch iteration to -1 to signal no batch
         self.batch_iteration = -1
+        self.hparams['epochs'] = 0
         # Training loop
         super().train(epochs, load_snapshot)
         # Shutdown multiprocessing dataloaders
@@ -190,6 +191,7 @@ class HumanVAETrainer(HPBaseTrainer):
         self.test_loader.shutdown()
 
     def train_epoch(self, epoch):
+        self.hparams['epochs'] = epoch
         # Set the seed for the training dataloader
         self.train_loader.seed(epoch)
         # Make sure model will record grad
@@ -208,7 +210,5 @@ class HumanVAETrainer(HPBaseTrainer):
             self.scheduler.step()
         
         self.trace_test_dataset(epoch)
-        # Set new epoch completion 
-        self.hparams['epochs'] = epoch
             
     
