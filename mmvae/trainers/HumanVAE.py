@@ -102,6 +102,7 @@ class HumanVAETrainer(HPBaseTrainer):
                 verbose=False,
             )
         elif len(train_mask) == 1 and len(test_mask) == 0:
+            print("Using single chunk dataloader")
             self.train_loader, self.test_loader = md.configure_singlechunk_dataloaders(
                 data_file_path=train_mask[0],
                 metadata_file_path=str(train_mask[0])
@@ -171,8 +172,10 @@ class HumanVAETrainer(HPBaseTrainer):
             # Make sure parameters of model are not being updated
             self.model.eval()
             for test_data in self.test_loader:
-                # Send test data to gpu
-                test_data = test_data.to(self.device)
+                # If data is not already on the gpu
+                if not test_data.is_cuda:
+                    # Send test data to gpu
+                    test_data = test_data.to(self.device)
                 # Trace over model with mean reduction
                 _, _, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(test_data, reduction='mean')
                 # Convert torch.Tensor to Number
@@ -233,8 +236,10 @@ class HumanVAETrainer(HPBaseTrainer):
         for train_data in self.train_loader:
             # Signal batch receivied index at 0
             self.batch_iteration += 1
-            # Send training data to gpu
-            train_data = train_data.to(self.device)
+            # If data is not already on the gpu
+            if not train_data.is_cuda:
+                # Send training data to gpu
+                train_data = train_data.to(self.device)
             # Run training iteration
             self.trace_train_batch(train_data)
             # Log learning rate
