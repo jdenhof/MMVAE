@@ -5,6 +5,7 @@ import mmvae.trainers.utils as utils
 import mmvae.models.HumanVAE as HumanVAE
 from mmvae.trainers import HPBaseTrainer, BaseTrainerConfig
 import torch.utils.tensorboard as tb
+import mmvae.data as md
 import csv
 
 class HumanVAEConfig(BaseTrainerConfig):
@@ -12,14 +13,15 @@ class HumanVAEConfig(BaseTrainerConfig):
         # 'data_file_path': str,
         # 'metadata_file_path': str,
         # 'train_dataset_ratio': float,
-        'data.train.directory' : str,
-        'data.train.batch_size': int,
-        'data.train.start_chunk': int,
-        'data.train.end_chunk': int,
-        'data.test.directory': str,
-        'data.test.batch_size': int,
-        'data.test.start_chunk': int,
-        'data.test.end_chunk': int,
+        # 'data.train.directory' : str,
+        # 'data.train.batch_size': int,
+        # 'data.train.start_chunk': int,
+        # 'data.train.end_chunk': int,
+        # 'data.test.directory': str,
+        # 'data.test.batch_size': int,
+        # 'data.test.start_chunk': int,
+        # 'data.test.end_chunk': int,
+        'batch_size': int,
         'expert.encoder.optimizer.lr': float,
         'expert.decoder.optimizer.lr': float, 
         'shr_vae.optimizer.lr': float, 
@@ -94,27 +96,31 @@ class HumanVAETrainer(HPBaseTrainer):
     configure_model = HumanVAE.configure_model
     
     def configure_dataloader(self):
-        import mmvae.data as md
-    
+        dl_type = None
+        if self.hparams.get('data.loader', None) is not None:
+            dl_type = str(self.hparams['data.loader']).lower()
+        if dl_type in ('CellCensus', 'CC'):
+            loaders = md.create_cell_census_dataloaders(self.hparams['batch_size'], 4, 4)
+            self.train_loader, self.test_loader = loaders
+            return loaders
         def generate_masks(name: str):
             return [f'human_chunk_{key}.npz' for key in range(self.hparams[f'data.{name}.start_chunk'], self.hparams[f'data.{name}.end_chunk'] + 1)]
-        train_mask, test_mask = generate_masks('train'), generate_masks('test')
-        print(train_mask, test_mask)
-        if (len(train_mask) > 1 or len(test_mask) > 1):
+        train_masks, test_masks = generate_masks('train'), generate_masks('test')
+        if dl_type in ('multi', 'm') or (len(train_masks) > 1 or len(test_masks) > 1): 
             self.train_loader, self.test_loader = md.configure_multichunk_dataloaders(
                 self.hparams['data.train.batch_size'],
                 self.hparams['data.train.directory'],
-                
+                train_masks,
                 self.hparams['data.test.batch_size'],
                 self.hparams['data.test.directory'],
-                
+                test_masks,
                 verbose=False,
             )
-        elif len(train_mask) == 1 and len(test_mask) == 0:
-            print("Using single chunk dataloader")
+            return (self.train_loader, self.test_loader)
+        elif dl_type in ('single', 's') or len(train_masks) == 1 and len(test_masks) == 0:
             self.train_loader, self.test_loader = md.configure_singlechunk_dataloaders(
-                data_file_path=f"{self.hparams['data.train.directory']}/{train_mask[0]}",
-                metadata_file_path=self.hparams['data.train.directory'] + str(train_mask[0])
+                data_file_path=f"{self.hparams['data.train.directory']}/{train_masks[0]}",
+                metadata_file_path=self.hparams['data.train.directory'] + str(train_masks[0])
                     .replace('human_chunk_', '/chunk')
                     .replace('.npz', '_metadata.csv'),
                 train_ratio=0.8,
@@ -123,7 +129,8 @@ class HumanVAETrainer(HPBaseTrainer):
                 test_batch_size=self.hparams['data.test.batch_size'],
                 header=self.hparams['data.train.header']
             )
-        return (self.train_loader, self.test_loader)
+            return (self.train_loader, self.test_loader)
+        return super().configure_dataloader()
         
     def configure_optimizers(self):
         self.optimizer = torch.optim.Adam([
@@ -219,9 +226,12 @@ class HumanVAETrainer(HPBaseTrainer):
         # Make sure model will record grad
         self.model.train()
         # Iterate over all samples in the trainig dataset
-        for train_data in self.train_loader:
-            if type(train_data) == tuple:
-                train_data, metadata = train_data
+        for batch in self.train_loader:
+            if type(batch) == tuple:
+                train_data, metadata, *_ = batch
+            else:
+                train_data = batch
+            
             # Signal batch receivied index at 0
             self.batch_iteration += 1
             # If data is not already on the gpu
@@ -250,9 +260,11 @@ class HumanVAETrainer(HPBaseTrainer):
         with torch.no_grad():
             # Make sure parameters of model are not being updated
             self.model.eval()
-            for test_data in self.test_loader:
-                if type(test_data) == tuple:
-                    test_data, metadata = test_data
+            for batch in self.test_loader:
+                if type(batch) == tuple:
+                    test_data, metadata, *_ = batch
+                else:
+                    test_data = batch
                 # If data is not already on the gpu
                 if not test_data.is_cuda:
                     # Send test data to gpu
