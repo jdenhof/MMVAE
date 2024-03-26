@@ -99,7 +99,7 @@ class HumanVAETrainer(HPBaseTrainer):
         dl_type = None
         if self.hparams.get('data.loader', None) is not None:
             dl_type = str(self.hparams['data.loader']).lower()
-        if dl_type in ('CellCensus', 'CC'):
+        if dl_type in ('cellcensus', 'cc'):
             loaders = md.create_cell_census_dataloaders(self.hparams['batch_size'], 4, 4)
             self.train_loader, self.test_loader = loaders
             return loaders
