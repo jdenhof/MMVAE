@@ -28,9 +28,9 @@ class HumanVAEConfig(BaseTrainerConfig):
         'kl_weight.max_beta': float 
     }
             
-class HumanMetricTracker:
+class TrainerMetricTracker:
     def __init__(self, hparams, writer: tb.writer.SummaryWriter):
-        super(HumanMetricTracker, self).__init__()
+        super(TrainerMetricTracker, self).__init__()
         self.hparams = hparams
         self.writer = writer
         self.train_metrics = utils.MetricTracker()
@@ -77,7 +77,7 @@ class HumanVAETrainer(HPBaseTrainer):
     
     def __init__(self, _device: torch.device, _hparams: HumanVAEConfig):
         super(HumanVAETrainer, self).__init__(_device, _hparams)
-        self.metric_tracker = HumanMetricTracker(self.hparams, self.writer)
+        self.metric_tracker = TrainerMetricTracker(self.hparams, self.writer)
         
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     #                             Configuration                             #
@@ -90,16 +90,28 @@ class HumanVAETrainer(HPBaseTrainer):
     
         def generate_masks(name: str):
             return [f'human_chunk_{key}.npz' for key in range(self.hparams[f'data.{name}.start_chunk'], self.hparams[f'data.{name}.end_chunk'] + 1)]
-
-        self.train_loader, self.test_loader = md.configure_multichunk_dataloaders(
-            self.hparams['data.train.batch_size'],
-            self.hparams['data.train.directory'],
-            generate_masks('train'),
-            self.hparams['data.test.batch_size'],
-            self.hparams['data.test.directory'],
-            generate_masks('test'),
-            verbose=False,
-        )
+        train_mask, test_mask = generate_masks('train'), generate_masks('test')
+        if (len(train_mask) > 1 or len(test_mask) > 1):
+            self.train_loader, self.test_loader = md.configure_multichunk_dataloaders(
+                self.hparams['data.train.batch_size'],
+                self.hparams['data.train.directory'],
+                
+                self.hparams['data.test.batch_size'],
+                self.hparams['data.test.directory'],
+                
+                verbose=False,
+            )
+        elif len(train_mask) == 1 and len(test_mask) == 0:
+            self.train_loader, self.test_loader = md.configure_singlechunk_dataloaders(
+                data_file_path=train_mask[0],
+                metadata_file_path=str(train_mask[0])
+                    .replace('human_chunk_', 'chunk')
+                    .replace('.npz', '_metadata.csv'),
+                train_ratio=0.8,
+                batch_size=self.hparams['data.train.batch_size'],
+                device=self.device,
+                test_batch_size=self.hparams['data.test.batch_size']
+            )
         return (self.train_loader, self.test_loader)
         
     def configure_optimizers(self):
