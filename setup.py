@@ -39,6 +39,7 @@ setup(
         "tensorboard",
         # "torch==2.3.0dev20240101+cu121",
         # "torchdata==0.7.1",
+        "cellxgene_census",
         "torch",
         "torchdata",
         "torchvision",

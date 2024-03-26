@@ -10,7 +10,6 @@ def create_cell_census_dataloaders(batch_size, num_test_workers, num_train_worke
     census = cellxgene_census.open_soma()
 
     import cellxgene_census.experimental.ml as census_ml
-    import tiledbsoma as soma
 
     experiment = census["census_data"]["homo_sapiens"]
 
