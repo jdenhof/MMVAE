@@ -57,12 +57,11 @@ class TrainerMetricTracker:
         # Write metrics and hparams to hparam file
         self.writer.add_hparams(dict(self.hparams), metrics, run_name=f"{self.hparams['tensorboard.run_name']}_hparams", global_step=self.hparams['epochs'])
         
-        if True or epoch == 10:
-            with open('/home/denhofja/graphs/kl_search.csv', 'a', newline='') as file:
-                writer = csv.writer(file)
-                
-                # Write the row
-                writer.writerow([self.hparams['kl_weight.max_beta'], *metrics.values()])
+        with open('/home/denhofja/graphs/kl_search.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            
+            # Write the row
+            writer.writerow([self.hparams['kl_weight.max_beta'], epoch, *metrics.values()])
         
     
     def log_trace_train_batch_results(self, kl_weight, batch_iteration, logging_interval=100):
