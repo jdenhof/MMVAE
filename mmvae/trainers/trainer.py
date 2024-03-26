@@ -80,6 +80,8 @@ class BaseTrainer:
             self.train_epoch(epoch)
             if self.save_every is not None and (epoch + 1) % self.save_every == 0:
                 self.save_snapshot(self.model)
+            if hasattr(self, 'test_epoch'):
+                self.test_epoch(epoch)
         
         if self.writer is not None:
             self.writer.flush()

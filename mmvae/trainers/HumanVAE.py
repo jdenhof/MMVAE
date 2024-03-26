@@ -5,6 +5,7 @@ import mmvae.trainers.utils as utils
 import mmvae.models.HumanVAE as HumanVAE
 from mmvae.trainers import HPBaseTrainer, BaseTrainerConfig
 import torch.utils.tensorboard as tb
+import csv
 
 class HumanVAEConfig(BaseTrainerConfig):
     required_hparams = {
@@ -55,6 +56,14 @@ class TrainerMetricTracker:
         metrics['Test/Loss/KL'] = self.test_metrics['kl_loss'] / self.test_metrics.iteration
         # Write metrics and hparams to hparam file
         self.writer.add_hparams(dict(self.hparams), metrics, run_name=f"{self.hparams['tensorboard.run_name']}_hparams", global_step=self.hparams['epochs'])
+        
+        if True or epoch == 10:
+            with open('/home/denhofja/graphs/kl_search.csv', 'a', newline='') as file:
+                writer = csv.writer(file)
+                
+                # Write the row
+                writer.writerow([self.hparams['kl_weight.max_beta'], *metrics.values()])
+        
     
     def log_trace_train_batch_results(self, kl_weight, batch_iteration, logging_interval=100):
         # Log KL weight for each batch iteration
@@ -91,6 +100,7 @@ class HumanVAETrainer(HPBaseTrainer):
         def generate_masks(name: str):
             return [f'human_chunk_{key}.npz' for key in range(self.hparams[f'data.{name}.start_chunk'], self.hparams[f'data.{name}.end_chunk'] + 1)]
         train_mask, test_mask = generate_masks('train'), generate_masks('test')
+        print(train_mask, test_mask)
         if (len(train_mask) > 1 or len(test_mask) > 1):
             self.train_loader, self.test_loader = md.configure_multichunk_dataloaders(
                 self.hparams['data.train.batch_size'],
@@ -104,14 +114,15 @@ class HumanVAETrainer(HPBaseTrainer):
         elif len(train_mask) == 1 and len(test_mask) == 0:
             print("Using single chunk dataloader")
             self.train_loader, self.test_loader = md.configure_singlechunk_dataloaders(
-                data_file_path=train_mask[0],
-                metadata_file_path=str(train_mask[0])
-                    .replace('human_chunk_', 'chunk')
+                data_file_path=f"{self.hparams['data.train.directory']}/{train_mask[0]}",
+                metadata_file_path=self.hparams['data.train.directory'] + str(train_mask[0])
+                    .replace('human_chunk_', '/chunk')
                     .replace('.npz', '_metadata.csv'),
                 train_ratio=0.8,
                 batch_size=self.hparams['data.train.batch_size'],
                 device=self.device,
-                test_batch_size=self.hparams['data.test.batch_size']
+                test_batch_size=self.hparams['data.test.batch_size'],
+                header=self.hparams['data.train.header']
             )
         return (self.train_loader, self.test_loader)
         
@@ -161,33 +172,6 @@ class HumanVAETrainer(HPBaseTrainer):
         # Calculate kl loss ~ reduction: training|testing : sum|mean
         kl_loss = utils.kl_divergence(mu, logvar, reduction=reduction)
         return x_hat, z, mu, logvar, recon_loss, kl_loss
-    
-    def trace_test_dataset(self, epoch):
-        # Seed test dataloader
-        self.test_loader.seed(epoch)
-        # Reset test metrics
-        self.metric_tracker.test_metrics.reset()
-        # Ensure no gradients are being computed
-        with torch.no_grad():
-            # Make sure parameters of model are not being updated
-            self.model.eval()
-            for test_data in self.test_loader:
-                # If data is not already on the gpu
-                if not test_data.is_cuda:
-                    # Send test data to gpu
-                    test_data = test_data.to(self.device)
-                # Trace over model with mean reduction
-                _, _, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(test_data, reduction='mean')
-                # Convert torch.Tensor to Number
-                recon_loss, kl_loss = recon_loss.item(), kl_loss.item()
-                # Update test metrics for iteration
-                self.metric_tracker.test_metrics.update({
-                    'recon_loss': recon_loss,
-                    'kl_loss': kl_loss,
-                    'loss': recon_loss + kl_loss
-                })
-        # Log test metrics
-        self.metric_tracker.log_trace_test_dataset_results(epoch)
         
     def trace_train_batch(self, train_data: torch.Tensor):
         # Zero optimizers
@@ -229,11 +213,14 @@ class HumanVAETrainer(HPBaseTrainer):
 
     def train_epoch(self, epoch):
         # Set the seed for the training dataloader
-        self.train_loader.seed(epoch)
+        if hasattr(self.test_loader, 'seed'):
+            self.train_loader.seed(epoch)
         # Make sure model will record grad
         self.model.train()
         # Iterate over all samples in the trainig dataset
         for train_data in self.train_loader:
+            if type(train_data) == tuple:
+                train_data, metadata = train_data
             # Signal batch receivied index at 0
             self.batch_iteration += 1
             # If data is not already on the gpu
@@ -245,9 +232,41 @@ class HumanVAETrainer(HPBaseTrainer):
             # Log learning rate
             self.metric_tracker.log_learning_rate(self.batch_iteration, self.scheduler)
             # Decrease learning rate if greater than stop condition
-            if (self.batch_iteration % self.hparams['schedular.step_size'] == 0) and self.hparams['schedular.stop'] < self.scheduler.get_last_lr()[0]:
+            if ((self.batch_iteration + 1) % self.hparams['schedular.step_size'] == 0) and not self.hparams['schedular.stop'] > self.scheduler.get_last_lr()[0]:
                 self.scheduler.step()
-        # Run test trace
-        self.trace_test_dataset(epoch)
+        
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    #                           Test Configuration                          #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        
+    def test_epoch(self, epoch):
+        # Seed test dataloader
+        if hasattr(self.test_loader, 'seed'):
+            self.test_loader.seed(epoch)
+        # Reset test metrics
+        self.metric_tracker.test_metrics.reset()
+        # Ensure no gradients are being computed
+        with torch.no_grad():
+            # Make sure parameters of model are not being updated
+            self.model.eval()
+            for test_data in self.test_loader:
+                if type(test_data) == tuple:
+                    test_data, metadata = test_data
+                # If data is not already on the gpu
+                if not test_data.is_cuda:
+                    # Send test data to gpu
+                    test_data = test_data.to(self.device)
+                # Trace over model with mean reduction
+                _, _, _, _, recon_loss, kl_loss = self.trace_expert_reconstruction(test_data, reduction='mean')
+                # Convert torch.Tensor to Number
+                recon_loss, kl_loss = recon_loss.item(), kl_loss.item()
+                # Update test metrics for iteration
+                self.metric_tracker.test_metrics.update({
+                    'recon_loss': recon_loss,
+                    'kl_loss': kl_loss,
+                    'loss': recon_loss + kl_loss
+                })
+        # Log test metrics
+        self.metric_tracker.log_trace_test_dataset_results(epoch)
             
     

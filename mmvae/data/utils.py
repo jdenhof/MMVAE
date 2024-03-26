@@ -4,7 +4,7 @@ import torch
 
 _CELL_CENSUS_COLUMN_NAMES = ["soma_joinid","dataset_id","assay","cell_type","development_stage","disease","donor_id","self_reported_ethnicity","sex","tissue","tissue_general"]
 
-def split_data_and_metadata(data_file_path: str, metadata_file_path: pd.DataFrame, train_ratio: float):
+def split_data_and_metadata(data_file_path: str, metadata_file_path: pd.DataFrame, train_ratio: float, header=False):
     """
     Splits a csr_matrix and its corresponding metadata (pandas DataFrame) into training and validation sets based on a given ratio.
     Important:
@@ -15,12 +15,15 @@ def split_data_and_metadata(data_file_path: str, metadata_file_path: pd.DataFram
     :return: A tuple containing the training and validation sets for both the csr_matrix and the DataFrame.
     """
     matrix: sp.csr_matrix = sp.load_npz(data_file_path)
-    metadata = pd.read_csv(metadata_file_path, header=None, names=_CELL_CENSUS_COLUMN_NAMES)
+    if not header:
+        metadata = pd.read_csv(metadata_file_path, header=None, names=_CELL_CENSUS_COLUMN_NAMES)
+    else:
+        metadata = pd.read_csv(metadata_file_path)
     # Ensure the train_ratio is within the valid range and the lengths match
     if not 0 < train_ratio < 1:
         raise ValueError("train_ratio must be between 0 and 1")
     if matrix.shape[0] != len(metadata):
-        raise ValueError("The number of rows in the matrix and metadata must match")
+        raise ValueError(f"The number of rows in the matrix and metadata must match: ({matrix.shape[0]} | {len(metadata)})")
 
     # Calculate the split index
     split_index = int(matrix.shape[0] * train_ratio)

@@ -108,7 +108,8 @@ def configure_singlechunk_dataloaders(
     train_ratio: float,
     batch_size: int,
     device: torch.device,
-    test_batch_size: int = None
+    test_batch_size: int = None,
+    header=False
 ):
     """
     Splits a csr_matrix provided by data_file_path with equal length metadata_file_path by train_ratio 
@@ -122,7 +123,8 @@ def configure_singlechunk_dataloaders(
     (train_data, train_metadata), (validation_data, validation_metadata) = utils.split_data_and_metadata(
         data_file_path,
         metadata_file_path,
-        train_ratio)
+        train_ratio,
+        header)
     
     from mmvae.data.datasets.CellCensusDataSet import CellCensusDataset, collate_fn
     if device:
