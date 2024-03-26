@@ -207,8 +207,10 @@ class HumanVAETrainer(HPBaseTrainer):
         # Training loop
         super().train(epochs, load_snapshot)
         # Shutdown multiprocessing dataloaders
-        for dataloader in self.dataloader:
-            dataloader.shutdown()
+        if type(self.dataloader) == tuple:
+            for dataloader in self.dataloader:
+                if hasattr(dataloader, 'shutdown'):
+                    dataloader.shutdown()
 
     def train_epoch(self, epoch):
         # Set the seed for the training dataloader
