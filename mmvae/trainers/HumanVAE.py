@@ -42,11 +42,11 @@ class TrainerMetricTracker:
     def log_architecture(self, model):
         self.writer.add_text('Model Architecture', str(model))
         
-    def log_non_zero_and_zero_reconstruction(self, inputs, targets):
-        non_zero_mask = inputs != 0
-        self.metrics['Test/Loss/NonZeroFeatureReconstruction'] += F.mse_loss(inputs[non_zero_mask], targets[non_zero_mask], reduction='sum') 
-        zero_mask = ~non_zero_mask
-        self.metrics['Test/Loss/ZeroFeatureReconstruction'] += F.mse_loss(inputs[zero_mask], targets[zero_mask], reduction='sum') 
+    # def log_non_zero_and_zero_reconstruction(self, inputs, targets):
+    #     non_zero_mask = inputs != 0
+    #     self.metrics['Test/Loss/NonZeroFeatureReconstruction'] += F.mse_loss(inputs[non_zero_mask], targets[non_zero_mask], reduction='sum') 
+    #     zero_mask = ~non_zero_mask
+    #     self.metrics['Test/Loss/ZeroFeatureReconstruction'] += F.mse_loss(inputs[zero_mask], targets[zero_mask], reduction='sum') 
         
     def log_trace_test_dataset_results(self, epoch = None):
         if epoch is not None:
@@ -61,7 +61,6 @@ class TrainerMetricTracker:
         
         with open('/home/denhofja/graphs/kl_search.csv', 'a', newline='') as file:
             writer = csv.writer(file)
-            
             # Write the row
             writer.writerow([self.hparams['kl_weight.max_beta'], epoch, *metrics.values()])
         
@@ -99,10 +98,6 @@ class HumanVAETrainer(HPBaseTrainer):
         dl_type = None
         if self.hparams.get('data.loader', None) is not None:
             dl_type = str(self.hparams['data.loader']).lower()
-        if dl_type in ('cellcensus', 'cc'):
-            loaders = md.create_cell_census_dataloaders(self.hparams['batch_size'], 4, 4)
-            self.train_loader, self.test_loader = loaders
-            return loaders
         def generate_masks(name: str):
             return [f'human_chunk_{key}.npz' for key in range(self.hparams[f'data.{name}.start_chunk'], self.hparams[f'data.{name}.end_chunk'] + 1)]
         train_masks, test_masks = generate_masks('train'), generate_masks('test')

@@ -3,30 +3,6 @@ from typing import Generator, Any
 import mmvae.data.pipes as p
 import torch
 import random
-import os
-
-def create_cell_census_dataloaders(batch_size, num_test_workers, num_train_workers, seed = 1):
-    import cellxgene_census
-    census = cellxgene_census.open_soma()
-
-    import cellxgene_census.experimental.ml as census_ml
-
-    experiment = census["census_data"]["homo_sapiens"]
-
-    experiment_datapipe = census_ml.ExperimentDataPipe(
-        experiment,
-        measurement_name="RNA",
-        X_name="normalized",
-        #obs_query=soma.AxisQuery(value_filter="tissue_general == 'tongue' and is_primary_data == True"),
-        obs_column_names=["cell_type"],
-        batch_size=batch_size,
-        shuffle=True,
-        soma_chunk_size=10_000,
-    )
-
-    train_datapipe, test_datapipe = experiment_datapipe.random_split(weights={"train": 0.8, "test": 0.2}, seed=seed)
-    return (census_ml.experiment_dataloader(train_datapipe, num_workers=num_train_workers), 
-            census_ml.experiment_dataloader(test_datapipe, num_workers=num_test_workers))
 
 class MultiModalLoader:
     """
