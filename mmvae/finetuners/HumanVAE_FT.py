@@ -12,7 +12,7 @@ class HumanVAE_FineTune(BaseTrainer):
     """
 
     model: HumanVAE_FT.Model
-    dataloader: MappedCellCensusDataLoader
+    # dataloader: MappedCellCensusDataLoader
 
     def __init__(self, batch_size, *args, **kwargs):
         self.batch_size = batch_size # Defined before super().__init__ as configure_* is called on __init__
@@ -24,12 +24,13 @@ class HumanVAE_FineTune(BaseTrainer):
         return HumanVAE_FT.configure_model() 
     
     def configure_dataloader(self):
-        return MappedCellCensusDataLoader(
-            batch_size=self.batch_size,
-            device=self.device,
-            file_path='/active/debruinz_project/CellCensus_3M/3m_human_chunk_10.npz',
-            load_all=True
-        )
+        pass
+        # return MappedCellCensusDataLoader(
+        #     batch_size=self.batch_size,
+        #     device=self.device,
+        #     file_path='/active/debruinz_project/CellCensus_3M/3m_human_chunk_10.npz',
+        #     load_all=True
+        # )
     
     def configure_optimizers(self):
         return {
@@ -54,25 +55,28 @@ class HumanVAE_FineTune(BaseTrainer):
             self.batch_iteration += 1
             self.train_trace_complete(train_data, epoch)
 
-    def train_trace_complete(self, train_data: torch.Tensor, epoch):
+    def train_trace_complete(self, healthy_data: torch.Tensor, mutant_data: torch.Tensor, epoch):
         # Zero All Gradients
         self.optimizers['shr_vae'].zero_grad()
         self.optimizers['encoder'].zero_grad()
         self.optimizers['decoder'].zero_grad()
 
         # Forwad Pass Over Entire Model
-        x_hat, mu, var = self.model(train_data)
-        recon_loss = F.l1_loss(x_hat, train_data.to_dense())
+        x_hat, mu, var = self.model(healthy_data)
+        recon_loss = F.l1_loss(x_hat, mutant_data.to_dense())
         
         # Shared VAE Loss
         kl_loss = utils.kl_divergence(mu, var)
-        kl_weight = min(1.0, epoch / self.annealing_steps)
+        #kl_weight = min(1.0, epoch / self.annealing_steps)
+        kl_weight = 0
         loss = recon_loss + (kl_loss * kl_weight)
         loss.backward()
+        
+        print(f"loss: {loss}")
     
         self.optimizers['shr_vae'].step()
         self.optimizers['encoder'].step()
         self.optimizers['decoder'].step()
 
-        self.writer.add_scalar('Loss/KL', kl_loss.item(), self.batch_iteration)
-        self.writer.add_scalar('Loss/ReconstructionFromTrainingData', loss.item(), self.batch_iteration)
+        self.writer.add_scalar('Loss/KL', kl_loss.item(), epoch)
+        self.writer.add_scalar('Loss/ReconstructionFromTrainingData', loss.item(), epoch)

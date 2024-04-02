@@ -1,11 +1,25 @@
 import torch
-from mmvae.trainers import HumanVAETrainer
+# from mmvae.trainers import HumanVAETrainer
 from datetime import datetime
-from csvFileLoader import CSVFileLoader
-from nearest import SparseDataset
-import numpy as np
+# from csvFileLoader import CSVFileLoader
+from mmvae.finetuners.nearest import SparseDataset
+from mmvae.finetuners.finetune import PreTrained_Model
+# import numpy as np
+import mmvae.finetuners.dataset as fd
+import csv
+
 
 def main(device):
+    dataset : SparseDataset
+    ft_trainer : PreTrained_Model
+    
+    csv_file = '/home/howlanjo/dev/MMVAE/csv_data/top_100_values' + datetime.now().strftime("%Y%m%d-%H%M%S") + '.csv'
+    
+    print("Starting now")
+    
+    ft_trainer = PreTrained_Model()
+    ft_trainer.load_pretrained_model()
+    
     # # Define any hyperparameters
     # batch_size = 32
     
@@ -19,43 +33,35 @@ def main(device):
     # # Train model with number of epochs
     # trainer.train(epochs = 2, load_snapshot=False)
     
-    # Create an instance of the CSVFileLoader
-    healthy_loader = CSVFileLoader(folder_path='/active/debruinz_project/human_data/python_data',
-                        filename_pattern='chunk10_metadata.csv',  # This will match any .csv file
-                        disease='normal',
-                        tissue_type='lung')
+    dataset = fd.create_knn_dataset()
     
-    # Create an instance of the CSVFileLoader
-    sick_loader = CSVFileLoader(folder_path='/active/debruinz_project/human_data/python_data',
-                        filename_pattern='chunk10_metadata.csv',  # This will match any .csv file
-                        disease='cystic fibrosis',
-                        tissue_type='lung')
+    print(f"len: {len(dataset.mutant_data)}")
+    
+    for i in range(len(dataset.mutant_data)):
+        cell_vector = 0    
+        cell_vector = dataset.__get_mutant_item__(i)
+        nearest_neighbor_idx, similarity, sim_list = dataset.find_nearest(cell_vector)
+        
+        
+        # sim_list.sort(reverse=True)
+        sim_list.sort(key=lambda x: x[0], reverse=True)
+        # Step 2: Slice the top 100 values
+        top_100 = sim_list[:100]
 
-    # Load the CSV files and filter rows
-    healthy_loader.load_files()
-    sick_loader.load_files()
-    
-    print(f"Number of healthy samples: {len(healthy_loader.matching_rows)}")
-    print(f"Number of sick samples: {len(sick_loader.matching_rows)}")
-    
-    # Example usage
-    npz_path = '/active/debruinz_project/human_data/python_data/human_chunk_10.npz'  # Path to your .npz file
-    dataset = SparseDataset(npz_path, device=device)
-    print("Finished loading datset")
-    
-    dataset.set_healthy_indices(healthy_loader.matching_indices, sick_loader.matching_indices)
-    print(f"dataset.data shape: {dataset.healthy_data.shape}")
-    
-    # cell_vector = np.random.rand(dataset.dataloader.dataset.data.shape[1])  # Example vector
-    
-    cell_vector = 0    
-    cell_vector = dataset.__get_mutant_item__(0)
-    print(f"cell_vector: {cell_vector}")
-    nearest_neighbor_idx, similarity = dataset.find_nearest(cell_vector)
+        # Step 3: Write the top 100 values to a CSV file
+        with open(csv_file, 'a', newline='') as file:
+            writer = csv.writer(file)
+            # Writing each value in its own row
+            for value in top_100:
+                writer.writerow([i, value[0], value[1]])
+            
+            # print("Starting Training")
+            # for i in range(100):
+            #     ft_trainer.model.train_trace_complete(dataset.__get_healthy_item__(nearest_neighbor_idx), cell_vector, i)
 
-    print(f"Nearest neighbor index: {nearest_neighbor_idx}, Similarity: {similarity}")
+    print("All done")
     
 if __name__ == "__main__":
-    CUDA = True
+    CUDA = False
     device = "cuda" if torch.cuda.is_available() and CUDA else "cpu"
     main(device)

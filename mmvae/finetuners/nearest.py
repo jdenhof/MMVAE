@@ -21,14 +21,11 @@ class SparseDataset():
         )
         
     def set_healthy_indices(self, healthy_indices_list, mutant_indices_list):
-        print(f"healthy_indices_list: {len(healthy_indices_list)}")
-        print(f"mutant_indices_list: {len(mutant_indices_list)}")
-        
         self.healthy_data = self.data[healthy_indices_list]
         self.mutant_data = self.data[mutant_indices_list]
         
+        #dropping dataset to reduce memory
         self.data = None
-        pass
 
     def __len__(self):
         return self.data.shape[0]
@@ -45,15 +42,17 @@ class SparseDataset():
         cell_vector = torch.tensor(cell_vector, dtype=torch.float32, device=self.device)
         max_similarity = -1
         nearest_neighbor_idx = -1
+        sim_list = []
         
         # Compute cosine similarity between cell_vector and each cell in the dataset
         for idx, data in enumerate(self.healthy_data):
             similarity = cosine_similarity(cell_vector.unsqueeze(0), data)
+            sim_list.append((similarity.item(), idx))
             if similarity > max_similarity:
                 max_similarity = similarity
                 nearest_neighbor_idx = idx
 
-        return nearest_neighbor_idx, max_similarity.item()
+        return nearest_neighbor_idx, max_similarity.item(), sim_list
 
 
 def main(device):
