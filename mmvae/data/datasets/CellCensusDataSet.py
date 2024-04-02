@@ -19,5 +19,6 @@ class CellCensusDataset(Dataset):
 
     def __getitem__(self, idx):
         data = self.data[idx]
-        labels = self.labels.iloc[idx, :]
+        if labels is not None:
+            labels = self.labels.iloc[idx, :]
         return data, labels
