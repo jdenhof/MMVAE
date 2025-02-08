@@ -1,0 +1,135 @@
+import argparse
+from typing import Literal, Union
+import numpy as np
+import pandas as pd
+from cmmvae.data.local.crossgen_loader import GroupedIndexLookup
+from cmmvae.callbacks.prediction_writer import load_from_hdf5
+
+
+SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
+
+
+def compute_similarity_matrix(data, metric: SIMULARITY_METRIC ="cosine"):
+    """Compute similarity matrix using cosine similarity or Euclidean distance"""
+    if metric == "cosine":
+        normed_data = data / np.linalg.norm(data, axis=1, keepdims=True)
+        similarity_matrix = np.dot(normed_data, normed_data.T)  # Cosine similarity
+    elif metric == "euclidean":
+        distances = np.linalg.norm(data[:, np.newaxis] - data, axis=2)  # Pairwise Euclidean distances
+        similarity_matrix = -distances  # Convert distance to similarity (negative distances)
+    else:
+        raise ValueError("Unsupported metric. Choose 'cosine' or 'euclidean'.")
+
+    return similarity_matrix
+
+def compute_intra_group_similarity(data, metric: SIMULARITY_METRIC ="cosine"):
+    """Compute average intra-group similarity"""
+    sim_matrix = compute_similarity_matrix(data, metric)
+    num_samples = data.shape[0]
+    # Exclude self-similarity (diagonal for cosine, self-distance for Euclidean)
+    intra_similarity = (sim_matrix.sum() - np.diag(sim_matrix).sum()) / (num_samples * (num_samples - 1))
+    return intra_similarity
+
+def compute_inter_group_similarity(data_A, data_B, metric="cosine"):
+    """Compute average inter-group similarity between two sets"""
+    if metric == "cosine":
+        normed_A = data_A / np.linalg.norm(data_A, axis=1, keepdims=True)
+        normed_B = data_B / np.linalg.norm(data_B, axis=1, keepdims=True)
+        inter_similarity_matrix = np.dot(normed_A, normed_B.T)  # Cosine similarity
+    elif metric == "euclidean":
+        inter_similarity_matrix = -np.linalg.norm(data_A[:, np.newaxis] - data_B, axis=2)  # Convert distance to similarity
+    else:
+        raise ValueError("Unsupported metric. Choose 'cosine' or 'euclidean'.")
+
+    inter_similarity = inter_similarity_matrix.mean()
+    return inter_similarity
+
+def separation_score(data_A, data_B, metric: SIMULARITY_METRIC = "cosine"):
+    """Compute the separation score"""
+    intra_A = compute_intra_group_similarity(data_A, metric)
+    intra_B = compute_intra_group_similarity(data_B, metric)
+    inter_AB = compute_inter_group_similarity(data_A, data_B, metric)
+    score = (intra_A + intra_B) / inter_AB
+    return {
+        "metric": metric,
+        "intra_A": intra_A,
+        "intra_B": intra_B,
+        "inter_AB": inter_AB,
+        "separation_score": score
+    }
+
+def _compute_scores(
+    data: np.ndarray,
+    lookup: GroupedIndexLookup,
+    metric: SIMULARITY_METRIC,
+):
+    scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
+    for group in lookup.get_groups():
+        indicesA, indicesB = group.data
+        score = separation_score(data[indicesA], data[indicesB], metric=metric)
+        for m in scores[group.varying_column]:
+            scores[group.varying_column][m] += score[m]
+    result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
+    return {
+        "metric": metric,
+        "group": scores,
+        "total": result
+    }
+
+def compute(
+    data: np.ndarray,
+    df: pd.DataFrame,
+    columns: list[str],
+    metric: SIMULARITY_METRIC = "euclidean"
+):
+    lookup = GroupedIndexLookup(df, columns=columns)
+    return _compute_scores(data, lookup, metric=metric)
+
+
+def main(
+    file_path: str,
+    key: str,
+    columns_of_variation: list[str],
+    metric: SIMULARITY_METRIC = "euclidean",
+):
+    """
+    Evaluates Cross-Generation Performance.
+
+    This script evaulates the performance of the cross-generation capabilities
+    of the model by comparing the generated samples from known metadata labels.
+
+    Given a metadata combination we seek to see how similar cross-generated
+    samples are from known samples of that combination.
+
+    ie.
+    Input | Target | Known
+       A       B       B
+       A       A       A
+       A       A       A
+
+    We cross genererate from Input label to Target label and then compare the distance between
+    all samples of Known to others to getting a metric of closeness to Known and further from other labels.
+    We then do the same vice versa where the Input becomes Target and Target and Known become the Input.
+    """
+
+    data, metadata, embedding = load_from_hdf5(file_path, key)
+    results = compute(data, metadata, columns_of_variation, metric=metric)
+    print(results, flush=True)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file_path", type=str,
+                        help="File path for hdf5 predictions.")
+    parser.add_argument("--key", type=str,
+                        help="Key for h5file for sampling ('x', 'xhat') or others")
+    parser.add_argument("--columns_of_variation", nargs='+', type=str, help="List of columns of variation.")
+    parser.add_argument("--metric", type=str, choices=["cosine", "euclidean"], default="euclidean")
+    args = parser.parse_args()
+    main(
+        file_path=args.file_path,
+        key = args.key,
+        columns_of_variation=args.columns_of_variation,
+        metric = args.metric
+    )

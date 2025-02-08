@@ -73,6 +73,8 @@ def save_to_hdf5(
 def load_from_hdf5(hdf5_filepath: str, key: str):
     """
     Load numpy array `data` and pandas DataFrame `metadata` from HDF5 file.
+
+    Returns: data, metadata, embedding
     """
     data = None
     metadata = None
@@ -108,6 +110,9 @@ def load_from_hdf5(hdf5_filepath: str, key: str):
         if RK.UMAP_EMBEDDINGS in group:
             embedding = group[RK.UMAP_EMBEDDINGS][:]
 
+    assert isinstance(data, np.ndarray)
+    assert isinstance(metadata, pd.DataFrame)
+    assert isinstance(embedding, Optional[np.ndarray])
     return data, metadata, embedding
 
 
