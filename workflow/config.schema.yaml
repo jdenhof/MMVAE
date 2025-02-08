@@ -32,6 +32,24 @@ properties:
     type: integer
     description: Random seed for reproducibility.
     default: 42
+  separation_score:
+    type: object
+    description: The score representing the separation quality.
+    properties:
+      file_path:
+        type: string
+        description: The path to the h5py predictions file
+      metric:
+        type: string
+        description: The metric used for the separation score.
+      columns:
+        type: array
+        items:
+          type: string
+        description: The columns used for the separation score.
+    required:
+      - metric
+      - columns
 required:
   - root_dir
   - experiment_name

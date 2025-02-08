@@ -88,8 +88,8 @@ def compute(
 
 def main(
     file_path: str,
-    key: str,
-    columns_of_variation: list[str],
+    keys: list[str],
+    columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean",
 ):
     """
@@ -111,10 +111,10 @@ def main(
     all samples of Known to others to getting a metric of closeness to Known and further from other labels.
     We then do the same vice versa where the Input becomes Target and Target and Known become the Input.
     """
-
-    data, metadata, embedding = load_from_hdf5(file_path, key)
-    results = compute(data, metadata, columns_of_variation, metric=metric)
-    print(results, flush=True)
+    for key in keys:
+        data, metadata, embedding = load_from_hdf5(file_path, key)
+        results = compute(data, metadata, columns, metric=metric)
+        print(results, flush=True)
 
 
 if __name__ == "__main__":
@@ -122,14 +122,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--file_path", type=str,
                         help="File path for hdf5 predictions.")
-    parser.add_argument("--key", type=str,
-                        help="Key for h5file for sampling ('x', 'xhat') or others")
-    parser.add_argument("--columns_of_variation", nargs='+', type=str, help="List of columns of variation.")
+    parser.add_argument("--keys", nargs='+', type=str,
+                        help="Keys for h5file for sampling ('x', 'xhat') or others")
+    parser.add_argument("--columns", nargs='+', type=str, help="List of columns of variation.")
     parser.add_argument("--metric", type=str, choices=["cosine", "euclidean"], default="euclidean")
     args = parser.parse_args()
     main(
         file_path=args.file_path,
-        key = args.key,
-        columns_of_variation=args.columns_of_variation,
+        keys = args.keys,
+        columns=args.columns,
         metric = args.metric
     )

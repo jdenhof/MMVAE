@@ -34,6 +34,12 @@ MERGE_KEYS = config["merge_keys"]
 ## Define the filename for the predictions saved
 PREDICTIONS_PATH = os.path.join(RUN_DIR, "predictions.h5")
 
+## Define the configuration for seperation scores
+SEPERATION_CONFIG = config.get("seperation_score", {})
+SEPERATION_SCORE_PATH = os.path.join(RUN_DIR, SEPERATION_CONFIG.get("file_path", "seperation_scores.txt"))
+SEPERATION_SCORE_METRIC = SEPERATION_CONFIG.get("metric", "euclidean")
+SEPERATION_SCORE_COLUMNS = SEPERATION_CONFIG.get("columns", [])
+
 ## Define the categories for which UMAP visualizations will be generated.
 ## This is optional, and if not provided, defaults to an empty list.
 CATEGORIES = config.get("categories", [])
@@ -156,6 +162,26 @@ rule predict:
     shell:
         """
         cmmvae workflow cli predict {params.command} --ckpt_path {input.ckpt_path}
+        """
+
+## Define the rule for computing the seperation scores
+## This rule outputs a score for each column along with the total
+rule seperation_scores:
+    input:
+        PREDICTIONS_PATH
+    output:
+        SEPERATION_SCORE_PATH
+    params:
+        keys=" ".join(MERGE_KEYS),
+        metric=SEPERATION_SCORE_METRIC,
+        columns_of_variation=" ".join(SEPERATION_SCORE_COLUMNS),
+    shell:
+        """
+        ./scripts/metrics/seperation_scores.py \
+            --file_path {input} \
+            --keys {params.keys} \
+            --columns {params.columns}
+            --metric {params.metric}
         """
 
 ## Define the rule for getting R^2 correlations on the filtered data
