@@ -9,7 +9,7 @@ from cmmvae.callbacks.prediction_writer import load_from_hdf5
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
 
 
-def compute_similarity_matrix(data, metric: SIMULARITY_METRIC ="cosine"):
+def compute_similarity_matrix(data: np.ndarray, metric: SIMULARITY_METRIC ="cosine"):
     """Compute similarity matrix using cosine similarity or Euclidean distance"""
     if metric == "cosine":
         normed_data = data / np.linalg.norm(data, axis=1, keepdims=True)
@@ -22,7 +22,7 @@ def compute_similarity_matrix(data, metric: SIMULARITY_METRIC ="cosine"):
 
     return similarity_matrix
 
-def compute_intra_group_similarity(data, metric: SIMULARITY_METRIC ="cosine"):
+def compute_intra_group_similarity(data: np.ndarray, metric: SIMULARITY_METRIC ="cosine"):
     """Compute average intra-group similarity"""
     sim_matrix = compute_similarity_matrix(data, metric)
     num_samples = data.shape[0]
@@ -30,7 +30,7 @@ def compute_intra_group_similarity(data, metric: SIMULARITY_METRIC ="cosine"):
     intra_similarity = (sim_matrix.sum() - np.diag(sim_matrix).sum()) / (num_samples * (num_samples - 1))
     return intra_similarity
 
-def compute_inter_group_similarity(data_A, data_B, metric="cosine"):
+def compute_inter_group_similarity(data_A: np.ndarray, data_B: np.ndarray, metric="cosine"):
     """Compute average inter-group similarity between two sets"""
     if metric == "cosine":
         normed_A = data_A / np.linalg.norm(data_A, axis=1, keepdims=True)
@@ -44,7 +44,7 @@ def compute_inter_group_similarity(data_A, data_B, metric="cosine"):
     inter_similarity = inter_similarity_matrix.mean()
     return inter_similarity
 
-def separation_score(data_A, data_B, metric: SIMULARITY_METRIC = "cosine"):
+def separation_score(data_A: np.ndarray, data_B: np.ndarray, metric: SIMULARITY_METRIC = "cosine"):
     """Compute the separation score"""
     intra_A = compute_intra_group_similarity(data_A, metric)
     intra_B = compute_intra_group_similarity(data_B, metric)
