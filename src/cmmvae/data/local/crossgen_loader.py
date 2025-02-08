@@ -105,7 +105,7 @@ class GroupedIndexLookup:
         for gkey, group in self.index_dicts.items():
             for rkey, indices in group.items():
                 varying_column = self.get_columns_not_in(gkey)[0]
-                group = self.df.iloc[indices, :].groupby(varying_column)
+                group = self.df.iloc[indices, :].groupby(varying_column, observed=True)
                 groups = [v for v in group.groups.values() if len(v) > 1]
                 for groupA, groupB in itertools.combinations(groups, 2):
                     yield GroupedIndexResult(
