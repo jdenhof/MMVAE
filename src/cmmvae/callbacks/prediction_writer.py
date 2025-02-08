@@ -112,7 +112,8 @@ def load_from_hdf5(hdf5_filepath: str, key: str):
 
     assert isinstance(data, np.ndarray)
     assert isinstance(metadata, pd.DataFrame)
-    assert isinstance(embedding, Optional[np.ndarray])
+    if embedding is not None:
+        assert isinstance(embedding, np.ndarray)
     return data, metadata, embedding
 
 
