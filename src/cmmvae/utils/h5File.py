@@ -8,16 +8,18 @@ from cmmvae.constants import REGISTRY_KEYS as RK
 
 logger = logging.getLogger(__name__)
 
-def log_method_decorator(logger: logging.Logger):
+def log_method_decorator(logger: logging.Logger, off = False):
     def decorator(func):
         def wrapper(*args, **kwargs):
-            logger.debug(f">{func.__name__}: {args} {kwargs}")
+            if not off:
+                logger.debug(f">{func.__name__}: {args} {kwargs}")
             result = func(*args, **kwargs)
-            logger.debug(f"<{func.__name__}: {result}")
+            if not off:
+                logger.debug(f"<{func.__name__}: {result}")
             return result
         return wrapper
     return decorator
-log_method = log_method_decorator(logger)
+log_method = log_method_decorator(logger, off=True)
 
 @log_method
 def _get_or_raise(obj, key, dtype):
@@ -86,13 +88,19 @@ def load(file_path: str, key: str):
     with h5py.File(file_path, swmr=True) as h5file:
         group = _get_group(h5file, key)
         logger.debug(f"Group: {group}")
-        data = get_data(group) or []
+        data = get_data(group)
         metadata = get_metadata(group)
-        embeddings = get_umap_embeddings(group) or []
+        embeddings = get_umap_embeddings(group)
+        if data is not None:
+            data = data[:]
+        if metadata is not None:
+            metadata = as_dataframe(metadata)
+        if embeddings is not None:
+            embeddings = embeddings[:]
         return {
-            RK.DATA: data[:] or None,
-            RK.METADATA: as_dataframe(metadata),
-            RK.UMAP_EMBEDDINGS: embeddings[:] or None
+            RK.DATA: data,
+            RK.METADATA: metadata,
+            RK.UMAP_EMBEDDINGS: embeddings
         }
 
 @log_method
