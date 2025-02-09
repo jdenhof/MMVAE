@@ -66,10 +66,12 @@ def _compute_scores(
     lookup: GroupedIndexLookup,
     metric: SIMULARITY_METRIC,
 ):
+    logger.debug(f"Computing scores for: {data}")
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
     for group in lookup.get_groups():
         indicesA, indicesB = group.data
         score = separation_score(data[indicesA], data[indicesB], metric=metric)
+        logger.debug("Score: ", score)
         for m in scores[group.varying_column]:
             scores[group.varying_column][m] += score[m]
     result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
