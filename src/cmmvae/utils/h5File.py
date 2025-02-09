@@ -6,12 +6,10 @@ from pandas._typing import ArrayLike
 import h5py
 from cmmvae.utils._logging import log_method_decorator
 from cmmvae.constants import REGISTRY_KEYS as RK
-
-
+import logging
 logger = logging.getLogger(__name__)
-log_method = log_method_decorator(logger)
 
-@log_method
+
 def _get_or_raise(obj, key, dtype):
     result = obj.get(key)
     if isinstance(result, dtype):
@@ -19,61 +17,54 @@ def _get_or_raise(obj, key, dtype):
     else:
         raise KeyError(f"{key} not a dataset in {obj}")
 
-@log_method
 def _get_group(obj, key) -> h5py.Group:
     return _get_or_raise(obj, key, h5py.Group)
 
-@log_method
 def get_group(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Group]:
     try:
         return _get_group(obj, key)
     except KeyError as e:
         logger.debug(f"Key could not be found: {e}")
 
-@log_method
 def _get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> h5py.Dataset:
     return _get_or_raise(obj, key, h5py.Dataset)
 
-@log_method
 def get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Dataset]:
     try:
         return _get_dataset(obj, key)
     except KeyError as e:
         logger.debug(f"Key could not be found: {e}")
 
-@log_method
 def as_dataframe(metadata: h5py.Group):
     return pd.DataFrame(
         {col: _get_dataset(metadata, col) for col in metadata.keys()}
     )
 
-@log_method
+@log_method_decorator(logger)
 def load(file_path: str, key: str, data: bool = True, metadata: bool = True, embeddings: bool = True):
-    logger.debug(f"Loading h5py: {key} - {file_path}")
     with h5py.File(file_path, swmr=True) as h5file:
         logger.debug(f"h5file handler opened...")
         group = _get_group(h5file, key)
         logger.debug(f"found group for {key}...")
-        _data = get_dataset(group, RK.DATA)
+        _data = get_dataset(group, RK.DATA) if data else None
         if _data is not None:
-            logger.debug("Splicing data...")
+            logger.debug("splicing data...")
             _data = _data[:]
-        _metadata = get_group(group, RK.METADATA)
+        _metadata = get_group(group, RK.METADATA) if metadata else None
         if _metadata is not None:
-            logger.debug("Converting metadata to dataframe...")
+            logger.debug("converting metadata to dataframe...")
             _metadata = as_dataframe(_metadata)
-        _embeddings = get_dataset(group, RK.UMAP_EMBEDDINGS)
+        _embeddings = get_dataset(group, RK.UMAP_EMBEDDINGS) if embeddings else None
         if embeddings and _embeddings is not None:
-            logger.debug("Splicing umap_embeddings...")
+            logger.debug("splicing umap_embeddings...")
             _embeddings = _embeddings[:]
-        logger.debug(f"Returning {_data}, {_metadata}, {_embeddings}...")
+        logger.debug(f"returning...{_data}, {_metadata}, {_embeddings}")
         return {
             RK.DATA: _data,
             RK.METADATA: _metadata,
             RK.UMAP_EMBEDDINGS: _embeddings
         }
 
-@log_method
 def _write(
     file_path: str,
     key: str,
@@ -105,15 +96,13 @@ def add_embeddings(file_path: str, key: str, embeddings: np.ndarray):
     _write(file_path, key, embeddings=embeddings,mode='a')
 
 def append(file_path: str, key: str, data: np.ndarray, metadata: pd.DataFrame):
-    _write(file_path, key, data=data, metadata=metadata)
+    _write(file_path, key, data=data, metadata=metadata, mode='a')
 
-@log_method
 def _append_data(ds: h5py.Dataset, data: Container, size: int):
     new_size = ds.shape[0] + size
     ds.resize(new_size, axis=0)
     ds[-size :] = data
 
-@log_method
 def _append_metadata(group: h5py.Group, metadata: pd.DataFrame, strict: bool = True):
     for col in metadata.columns:
         if strict and col not in group:

@@ -68,19 +68,19 @@ def _compute_scores(
     lookup: GroupedIndexLookup,
     metric: SIMULARITY_METRIC,
 ):
-    logger.debug(f"Computing scores for: {data}")
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
     total_scores = {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")}
-    for group in tqdm.tqdm(lookup.get_groups(), desc="Computing scores"):
-        tqdm.tqdm.write(f"Running total scores: {total_scores}")
-        logger.debug(f"computing scores for group {group}")
-        indicesA, indicesB = group.data
-        dataA = data[indicesA]
-        dataB = data[indicesB]
-        score = separation_score(dataA, dataB, metric=metric)
-        logger.debug(f"Score: {score}")
-        for m in scores[group.varying_column]:
-            scores[group.varying_column][m] += score[m]
+    logger.debug("getting groups...")
+    groups = list(lookup.get_groups())
+    total_groups = len(groups)
+    logger.debug("computing score...")
+    with tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") as pbar:
+        for i, group in enumerate(groups):
+            pbar.set_postfix_str(f"Running total scores: {total_scores}")
+            score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
+            for m in scores[group.varying_column]:
+                scores[group.varying_column][m] += score[m]
+            pbar.update(1)
     result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
     return {
         "metric": metric,
