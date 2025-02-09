@@ -11,7 +11,7 @@ import click
 import h5py
 from pathlib import Path
 
-from cmmvae.callbacks.prediction_writer import load_from_hdf5
+from cmmvae.utils import h5File
 from cmmvae.constants import REGISTRY_KEYS as RK
 
 
@@ -126,10 +126,11 @@ def plot_umap_h5(
 
     image_paths = []
     for key in keys:
-        data, metadata, embeddings = load_from_hdf5(hdf5_filepath, key)
+        data, metadata, embeddings = h5File.load(hdf5_filepath, key)
 
         if embeddings is None:
             embeddings = umap_embeddings(data)
+            h5File.create_umap_embeddings
             with h5py.File(hdf5_filepath, "a") as h5file:
                 ds = h5file.get(key)
 

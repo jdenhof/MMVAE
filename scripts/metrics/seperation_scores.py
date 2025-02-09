@@ -120,7 +120,7 @@ def main(
     """
     for key in keys:
         prediction = h5File.load(file_path, key)
-        results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
+        results = compute(prediction[RK.DATA][:], prediction[RK.METADATA], columns, metric=metric)
         print(results, flush=True)
 
 
