@@ -69,8 +69,9 @@ def _compute_scores(
     metric: SIMULARITY_METRIC,
     progress_bar: bool = True,
 ):
-    metrics = ("intra_A", "intra_B", "inter_AB", "separation_score", "varying_column", "row_key")
-    df = pd.DataFrame(columns=metrics)
+    metrics = ("intra_A", "intra_B", "inter_AB", "separation_score")
+    columns = metrics + ("varying_column", "row_key")
+    df = pd.DataFrame(columns=columns)
     logger.debug("getting groups...")
     groups = list(lookup.get_groups())
     total_groups = len(groups)
