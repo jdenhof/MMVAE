@@ -98,6 +98,7 @@ def main(
     keys: list[str],
     columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean",
+    output_path: str = "seperation_scores.csv"
 ):
     """
     Evaluates Cross-Generation Performance.
@@ -121,7 +122,8 @@ def main(
     for key in keys:
         prediction = h5File.load(file_path, key)
         results = compute(prediction[RK.DATA][:], prediction[RK.METADATA], columns, metric=metric)
-        print(results, flush=True)
+        pd.DataFrame(results["group"]).to_csv(f"{key}_group_{output_path}")
+        pd.DataFrame(results["total"]).to_csv(f"{key}_total_{output_path}")
 
 
 if __name__ == "__main__":
@@ -135,10 +137,12 @@ if __name__ == "__main__":
     parser.add_argument("--metric", type=str, choices=["cosine", "euclidean"], default="euclidean")
     parser.add_argument("--threshold", type=int, default=1,
                         help="Threshold to limit group size.")
+    parser.add_argument("--output_path", type=str, default="seperation_scores.csv")
     args = parser.parse_args()
     main(
         file_path=args.file_path,
-        keys = args.keys,
+        keys=args.keys,
         columns=args.columns,
-        metric = args.metric
+        metric=args.metric,
+        output_path=args.output_path,
     )
