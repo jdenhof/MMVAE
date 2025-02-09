@@ -95,7 +95,7 @@ def _write(
 def add_embeddings(file_path: str, key: str, embeddings: np.ndarray):
     _write(file_path, key, embeddings=embeddings,mode='a')
 
-def append(file_path: str, key: str, data: np.ndarray, metadata: pd.DataFrame):
+def append_batch(file_path: str, key: str, data: np.ndarray, metadata: pd.DataFrame):
     _write(file_path, key, data=data, metadata=metadata, mode='a')
 
 def _append_data(ds: h5py.Dataset, data: Container, size: int):

@@ -61,8 +61,8 @@ class PredictionWriter(BasePredictionWriter):
 
         for key, (data, metadata) in prediction.items():
             data = data.cpu().numpy() if isinstance(data, torch.Tensor) else data
-            utils.replace_inf(data)
-            utils.h5File.write(self.hdf5_filepath, data, metadata, key)
+            data = utils.replace_inf(data)
+            utils.h5File.append_batch(self.hdf5_filepath, key, data, metadata)
 
         self._curr_size += batch[0].shape[
             0

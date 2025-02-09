@@ -72,10 +72,8 @@ def _compute_scores(
     metrics = ("intra_A", "intra_B", "inter_AB", "separation_score")
     columns = metrics + ("varying_column", "row_key")
     df = pd.DataFrame(columns=columns)
-    logger.debug("getting groups...")
     groups = list(lookup.get_groups())
     total_groups = len(groups)
-    logger.debug("computing score...")
     pbar = tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") if progress_bar else None
     for i, group in enumerate(groups):
         if pbar is not None and i % 100 == 0:
@@ -88,7 +86,6 @@ def _compute_scores(
             pbar.update()
     if pbar is not None:
         pbar.close()
-
     return df
 
 def compute(
@@ -97,10 +94,9 @@ def compute(
     columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean"
 ):
-    logger.debug(f"Computing GroupedIndexLookup...")
-    print("Computing GroupedIndexLookup...")
+    logger.info(f"Computing GroupedIndexLookup...")
     lookup = GroupedIndexLookup(df, columns=columns)
-    logger.debug("Computing scores...")
+    logger.info("Computing scores...")
     return _compute_scores(data, lookup, metric=metric)
 
 
