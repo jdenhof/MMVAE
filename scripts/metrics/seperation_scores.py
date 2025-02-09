@@ -75,7 +75,7 @@ def _compute_scores(
         dataA = data[indicesA]
         dataB = data[indicesB]
         score = separation_score(dataA, dataB, metric=metric)
-        logger.debug("Score: ", score)
+        logger.debug(f"Score: {score}")
         for m in scores[group.varying_column]:
             scores[group.varying_column][m] += score[m]
     result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
