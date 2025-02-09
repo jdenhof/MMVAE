@@ -3,7 +3,8 @@ from typing import Literal, Union
 import numpy as np
 import pandas as pd
 from cmmvae.data.local.crossgen_loader import GroupedIndexLookup
-from cmmvae.callbacks.prediction_writer import load_from_hdf5
+from cmmvae.utils import h5File
+from cmmvae.constants import REGISTRY_KEYS as RK
 
 
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
@@ -112,8 +113,8 @@ def main(
     We then do the same vice versa where the Input becomes Target and Target and Known become the Input.
     """
     for key in keys:
-        data, metadata, embedding = load_from_hdf5(file_path, key)
-        results = compute(data, metadata, columns, metric=metric)
+        prediction = h5File.load(file_path, key)
+        results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
         print(results, flush=True)
 
 

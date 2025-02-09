@@ -6,7 +6,8 @@ from typing import NamedTuple
 
 class REGISTRY_KEYS_NT(NamedTuple):
     """A NamedTuple to store constant keys used in a registry for machine learning models."""
-
+    DATA: str = "data"
+    """Key for data"""
     LOSS: str = "loss"
     """Key for the loss value."""
     RECON_LOSS: str = "recon_loss"

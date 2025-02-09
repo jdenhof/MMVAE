@@ -5,116 +5,9 @@ from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import BasePredictionWriter
 import pandas as pd
 import numpy as np
-import h5py
 import torch
 
-from cmmvae.constants import REGISTRY_KEYS as RK
-
-
-def save_to_hdf5(
-    data: np.ndarray,
-    metadata: pd.DataFrame,
-    hdf5_filepath: str,
-    key: str,
-    strict: bool = True,
-):
-    """
-    Save numpy array `data` and pandas DataFrame `metadata` to HDF5 file.
-    Each column in the metadata DataFrame will be stored as a separate dataset.
-    """
-    with h5py.File(hdf5_filepath, "a") as h5file:
-        if key not in h5file:
-            h5file.create_group(key)
-        group = h5file[key]
-
-        if RK.PREDICT_SAMPLES in group and RK.METADATA in group:
-            sample_ds = group[RK.PREDICT_SAMPLES]
-            metadata_ds = group[RK.METADATA]
-
-            new_size = sample_ds.shape[0] + data.shape[0]
-            sample_ds.resize(new_size, axis=0)
-            sample_ds[-data.shape[0] :] = data  # Append new batch
-            # Append metadata column-wise
-            for col in metadata.columns:
-                col = str(col)
-                column_data = metadata[col].values
-                if hasattr(column_data, "to_list"):
-                    column_data = column_data.to_list()
-                if col not in metadata_ds:
-                    if strict:
-                        raise RuntimeError(
-                            f"metadata column {col} not in h5file for group_key {key}/{RK.METADATA}/{col}"
-                        )
-                    else:
-                        continue
-
-                metadata_ds[col].resize(new_size, axis=0)
-                metadata_ds[col][-len(column_data) :] = column_data
-        else:
-            # Create a new dataset for `data`
-            group.create_dataset(
-                RK.PREDICT_SAMPLES,
-                data=data,
-                maxshape=(None,) + data.shape[1:],
-                chunks=True,
-            )
-
-            # Create metadata datasets, one for each column
-            metadata_group = group.create_group(RK.METADATA)
-            for col in metadata.columns:
-                column_data = metadata[col].values
-                if hasattr(column_data, "to_list"):
-                    column_data = column_data.to_list()
-                metadata_group.create_dataset(
-                    str(col), data=column_data, maxshape=(None,), chunks=True
-                )
-
-
-def load_from_hdf5(hdf5_filepath: str, key: str):
-    """
-    Load numpy array `data` and pandas DataFrame `metadata` from HDF5 file.
-
-    Returns: data, metadata, embedding
-    """
-    data = None
-    metadata = None
-    embedding = None
-
-    with h5py.File(hdf5_filepath, "r") as h5file:
-        group = h5file[key]
-
-        if RK.PREDICT_SAMPLES in group:
-            data = group[RK.PREDICT_SAMPLES][:]
-
-        if RK.METADATA in group:
-            # Load metadata as individual columns
-            metadata_group = group[RK.METADATA]
-            metadata = pd.DataFrame(
-                {col: metadata_group[col][:] for col in metadata_group.keys()}
-            )
-
-        if RK.UMAP_EMBEDDINGS in group:
-            embedding = group[RK.UMAP_EMBEDDINGS][:]
-        group = h5file[key]
-
-        if RK.PREDICT_SAMPLES in group:
-            data = group[RK.PREDICT_SAMPLES][:]
-
-        if RK.METADATA in group:
-            # Load metadata as individual columns
-            metadata_group = group[RK.METADATA]
-            metadata = pd.DataFrame(
-                {col: metadata_group[col][:] for col in metadata_group.keys()}
-            )
-
-        if RK.UMAP_EMBEDDINGS in group:
-            embedding = group[RK.UMAP_EMBEDDINGS][:]
-
-    assert isinstance(data, np.ndarray)
-    assert isinstance(metadata, pd.DataFrame)
-    if embedding is not None:
-        assert isinstance(embedding, np.ndarray)
-    return data, metadata, embedding
+import cmmvae.utils as utils
 
 
 class PredictionWriter(BasePredictionWriter):
@@ -168,18 +61,10 @@ class PredictionWriter(BasePredictionWriter):
 
         for key, (data, metadata) in prediction.items():
             data = data.cpu().numpy() if isinstance(data, torch.Tensor) else data
-            max_f4 = np.finfo(np.float32).max
-            min_f4 = np.finfo(np.float32).min
+            utils.replace_inf(data)
+            utils.h5File.write(self.hdf5_filepath, data, metadata, key)
 
-            # Replace +inf with max_f4 and -inf with min_f4
-            data[np.isposinf(data)] = max_f4
-            data[np.isneginf(data)] = min_f4
-
-            # Convert the array to float32
-            data = data.astype(np.float32)
-            save_to_hdf5(data, metadata, self.hdf5_filepath, key)
-
-        self._curr_size += list(prediction.values())[0][0].shape[
+        self._curr_size += batch[0].shape[
             0
         ]  # Increment by batch size
 
