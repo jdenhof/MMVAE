@@ -67,6 +67,7 @@ def _compute_scores(
     data: np.ndarray,
     lookup: GroupedIndexLookup,
     metric: SIMULARITY_METRIC,
+    progress_bar: bool = True,
 ):
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
     total_scores = {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")}
@@ -74,14 +75,17 @@ def _compute_scores(
     groups = list(lookup.get_groups())
     total_groups = len(groups)
     logger.debug("computing score...")
-    with tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") as pbar:
-        for i, group in enumerate(groups):
-            if i % 10 == 0:
-                pbar.set_postfix_str(f"Running total scores: {total_scores}")
-            score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
-            for m in scores[group.varying_column]:
-                scores[group.varying_column][m] += score[m]
+    pbar = tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") if progress_bar else None
+    for i, group in enumerate(groups):
+        if pbar is not None and i % 10 == 0:
+            pbar.set_postfix_str(f"Running total scores: {total_scores}")
+        score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
+        for m in scores[group.varying_column]:
+            scores[group.varying_column][m] += score[m]
+        if pbar is not None:
             pbar.update()
+    if pbar is not None:
+        pbar.close()
     result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
     return {
         "metric": metric,
