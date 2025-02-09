@@ -2,9 +2,11 @@ import argparse
 from typing import Literal, Union
 import numpy as np
 import pandas as pd
-from cmmvae.data.local.crossgen_loader import GroupedIndexLookup
+from cmmvae.data.local.grouped_index_lookup import GroupedIndexLookup
 from cmmvae.utils import h5File
 from cmmvae.constants import REGISTRY_KEYS as RK
+import logging
+logger = logging.getLogger(__name__)
 
 
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
@@ -127,6 +129,8 @@ if __name__ == "__main__":
                         help="Keys for h5file for sampling ('x', 'xhat') or others")
     parser.add_argument("--columns", nargs='+', type=str, help="List of columns of variation.")
     parser.add_argument("--metric", type=str, choices=["cosine", "euclidean"], default="euclidean")
+    parser.add_argument("--threshold", type=int, default=1,
+                        help="Threshold to limit group size.")
     args = parser.parse_args()
     main(
         file_path=args.file_path,

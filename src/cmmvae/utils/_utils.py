@@ -4,7 +4,9 @@ import pandas as pd
 import numpy as np
 import h5py
 from cmmvae.constants import REGISTRY_KEYS as RK
+import logging
 
+logger = logging.getLogger(__name__)
 
 def is_iterable(obj):
     """
@@ -35,55 +37,76 @@ def replace_inf(data: np.ndarray, dtype: Type[np.floating] = np.float32) -> np.n
 
 class h5File:
 
+    DATA: str = RK.DATA
+    METADATA: str = RK.METADATA
+    UMAP_EMBEDDINGS: str = RK.UMAP_EMBEDDINGS
+
+    @staticmethod
+    def _get_or_raise(obj, key, dtype):
+        result = obj.get(key)
+        if isinstance(result, dtype):
+            return result
+        else:
+            raise KeyError(f"{key} not a dataset in {obj}")
+
+    @staticmethod
+    def _get_group(obj, key) -> h5py.Group:
+        return h5File._get_or_raise(obj, key, h5py.Group)
+
     @staticmethod
     def get_group(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Group]:
-        result = obj.get(key)
-        if isinstance(result, h5py.Group):
-            return result
+        try:
+            return h5File._get_group(obj, key)
+        except KeyError as e:
+            logger.debug(f"Key could not be found: {e}")
+
+    @staticmethod
+    def _get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> h5py.Dataset:
+        return h5File._get_or_raise(obj, key, h5py.Dataset)
 
     @staticmethod
     def get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Dataset]:
-        result = obj.get(key)
-        if isinstance(result, h5py.Dataset):
-            return result
+        try:
+            return h5File._get_dataset(obj, key)
+        except KeyError as e:
+            logger.debug(f"Key could not be found: {e}")
 
     @staticmethod
     def get_data(group: h5py.Group):
-        return h5File.get_dataset(group, RK.DATA)
+        return h5File.get_dataset(group, h5File.DATA)
 
     @staticmethod
     def create_data(group: h5py.Group):
-        return group.create_dataset(RK.DATA, chunks=True)
+        return group.create_dataset(h5File.DATA, chunks=True)
 
     @staticmethod
     def get_metadata(group: h5py.Group):
-        return h5File.get_group(group, RK.METADATA)
+        return h5File.get_group(group, h5File.METADATA)
 
     @staticmethod
     def create_metadata(group: h5py.Group):
-        return group.create_group(RK.METADATA)
+        return group.create_group(h5File.METADATA)
 
     @staticmethod
     def get_umap_embeddings(group: h5py.Group):
-        return h5File.get_dataset(group, RK.UMAP_EMBEDDINGS)
+        return h5File.get_dataset(group, h5File.UMAP_EMBEDDINGS)
 
     @staticmethod
     def as_dataframe(metadata: Optional[h5py.Group]):
         if metadata is not None:
             return pd.DataFrame(
-                {col: metadata[col][:] for col in metadata.keys()}
+                {col: h5File.get_dataset(metadata, col) for col in metadata.keys()}
             )
 
     @staticmethod
     def load(file_path: str, key: str):
+        logger.debug(f"Loading h5py: {key} - {file_path}")
         with h5py.File(file_path) as h5file:
-            group = h5file.get(key)
-            if not isinstance(group, h5py.Group):
-                raise ValueError(f"Key at {file_path}: '{key}' is not a group!")
+            group = h5File._get_group(h5file, key)
             return {
-                RK.DATA: h5File.get_data(group),
-                RK.METADATA: h5File.as_dataframe(h5File.get_metadata(group)),
-                RK.UMAP_EMBEDDINGS: h5File.get_umap_embeddings(group)
+                h5File.DATA: h5File.get_data(group),
+                h5File.METADATA: h5File.as_dataframe(h5File.get_metadata(group)),
+                h5File.UMAP_EMBEDDINGS: h5File.get_umap_embeddings(group)
             }
 
     @staticmethod
@@ -111,11 +134,11 @@ class h5File:
             if hasattr(column_data, "tolist"):
                 column_data = column_data.tolist()
             elif hasattr(column_data, "to_list"):
-                column_data = column_data.to_list()
+                column_data = column_data.to_list() # type: ignore
             elif not isinstance(column_data, list):
                 raise TypeError("'column_data' must be of type list")
             if strict and col not in group:
-                    raise RuntimeError(f"metadata column {col} not in h5file")
+                    raise RuntimeError(f"metadata column {col} not in h5File")
             column_ds = h5File.get_dataset(group, str(col)) or group.create_dataset(str(col), chunks=True)
             new_size = column_ds.shape[0] + metadata.shape[0]
             column_ds.resize(new_size, axis=0)

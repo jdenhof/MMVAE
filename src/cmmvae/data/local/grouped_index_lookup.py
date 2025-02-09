@@ -1,8 +1,11 @@
 from typing import Callable, Iterable, Optional, Iterator, Container
 from dataclasses import dataclass
 import itertools
+import logging
 
 import pandas as pd
+logger = logging.getLogger(__name__)
+
 
 
 @dataclass
@@ -98,15 +101,17 @@ class GroupedIndexLookup:
         column_key = self.get_columns_not_in(varying_columns)
         return self.index_dicts.get(column_key, {})
 
-    def get_groups(self) -> Iterable[GroupedIndexResult]:
+    def get_groups(self, threshold: int = 1) -> Iterable[GroupedIndexResult]:
         """
         Returns samples of all matching columns and all one off pertabations.
         """
+        if threshold < 1:
+            logger.info("get_groups 'threshold' must be at least 1...setting to 1.")
         for gkey, group in self.index_dicts.items():
             for rkey, indices in group.items():
                 varying_column = self.get_columns_not_in(gkey)[0]
                 group = self.df.iloc[indices, :].groupby(varying_column, observed=True)
-                groups = [v for v in group.groups.values() if len(v) > 1]
+                groups = [v for v in group.groups.values() if len(v) > threshold]
                 for groupA, groupB in itertools.combinations(groups, 2):
                     yield GroupedIndexResult(
                         data=(groupA, groupB),
