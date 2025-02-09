@@ -8,7 +8,7 @@ from cmmvae.utils import h5File
 from cmmvae.constants import REGISTRY_KEYS as RK
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cmmvae.seperation_scores")
 
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
 
@@ -70,6 +70,7 @@ def _compute_scores(
     logger.debug(f"Computing scores for: {data}")
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
     for group in lookup.get_groups():
+        logger.debug(f"computing scores for group {group}")
         indicesA, indicesB = group.data
         dataA = data[indicesA]
         dataB = data[indicesB]
@@ -90,9 +91,10 @@ def compute(
     columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean"
 ):
+    logger.debug(f"Computing GroupedIndexLookup...")
     print("Computing GroupedIndexLookup...")
     lookup = GroupedIndexLookup(df, columns=columns)
-    print("Computing scores...")
+    logger.debug("Computing scores...")
     return _compute_scores(data, lookup, metric=metric)
 
 
@@ -124,7 +126,7 @@ def main(
     """
     for key in keys:
         prediction = h5File.load(file_path, key, embeddings=False)
-        print("Loaded:", prediction)
+        logger.debug("Loaded:", prediction)
         results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
         pd.DataFrame(results["group"]).to_csv(f"{key}_group_{output_path}")
         pd.DataFrame(results["total"]).to_csv(f"{key}_total_{output_path}")
