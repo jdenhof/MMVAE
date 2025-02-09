@@ -3,10 +3,19 @@ import logging
 import numpy as np
 import pandas as pd
 import h5py
-import cmmvae
 from cmmvae.constants import REGISTRY_KEYS as RK
 logger = logging.getLogger(__name__)
-log_method = cmmvae.log_method_decorator(logger)
+
+def log_method_decorator(logger: logging.Logger):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            logger.debug(f">{func.__name__}: {args} {kwargs}")
+            result = func(*args, **kwargs)
+            logger.debug(f"<{func.__name__}: {result}")
+            return result
+        return wrapper
+    return decorator
+log_method = log_method_decorator(logger)
 
 @log_method
 def _get_or_raise(obj, key, dtype):
