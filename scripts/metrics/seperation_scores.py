@@ -69,33 +69,26 @@ def _compute_scores(
     metric: SIMULARITY_METRIC,
     progress_bar: bool = True,
 ):
-    metrics = ("intra_A", "intra_B", "inter_AB", "separation_score")
-    scores = {col: {m: 0 for m in metrics} for col in lookup.columns}
-    total_scores = {m: 0 for m in metrics}
+    metrics = ("intra_A", "intra_B", "inter_AB", "separation_score", "varying_column", "row_key")
+    df = pd.DataFrame(columns=metrics)
     logger.debug("getting groups...")
     groups = list(lookup.get_groups())
     total_groups = len(groups)
     logger.debug("computing score...")
     pbar = tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") if progress_bar else None
     for i, group in enumerate(groups):
-        if pbar is not None and i % 10 == 0:
-            update = {m: round(total_scores[m], 4)for m in metrics}
-            update.setdefault("Iteration", i+1)
-            pbar.set_postfix(update)
+        if pbar is not None and i % 100 == 0:
+            pbar.set_postfix({
+                "Score": df.sum(axis=1)
+            })
         score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
-        for m in metrics:
-            scores[group.varying_column][m] += score[m]
-            total_scores[m] += score[m]
+        df.loc[len(df)] = [score[m] for m in metrics] + [group.varying_column, group.row_key]
         if pbar is not None:
             pbar.update()
     if pbar is not None:
         pbar.close()
-    result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
-    return {
-        "metric": metric,
-        "group": scores,
-        "total": result
-    }
+
+    return df
 
 def compute(
     data: np.ndarray,
@@ -140,8 +133,7 @@ def main(
         prediction = h5File.load(file_path, key, embeddings=False)
         logger.debug("Loaded:", prediction)
         results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
-        pd.DataFrame(results["group"]).to_csv(f"{key}_group_{output_path}")
-        pd.DataFrame(results["total"]).to_csv(f"{key}_total_{output_path}")
+        results.to_csv(output_path)
 
 
 if __name__ == "__main__":
