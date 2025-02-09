@@ -70,7 +70,9 @@ def _compute_scores(
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
     for group in lookup.get_groups():
         indicesA, indicesB = group.data
-        score = separation_score(data[indicesA], data[indicesB], metric=metric)
+        dataA = data[indicesA]
+        dataB = data[indicesB]
+        score = separation_score(dataA, dataB, metric=metric)
         logger.debug("Score: ", score)
         for m in scores[group.varying_column]:
             scores[group.varying_column][m] += score[m]
