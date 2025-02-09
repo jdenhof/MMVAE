@@ -2,12 +2,13 @@ import argparse
 from typing import Literal, Union
 import numpy as np
 import pandas as pd
+
 from cmmvae.data.local.grouped_index_lookup import GroupedIndexLookup
 from cmmvae.utils import h5File
 from cmmvae.constants import REGISTRY_KEYS as RK
 import logging
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
 

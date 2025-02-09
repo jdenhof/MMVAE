@@ -31,3 +31,13 @@ setup_logging()
 logger = logging.getLogger("cmmvae")
 logger.setLevel(os.getenv("CMMVAE_LOG_LEVEL", "INFO").upper())
 logger.debug("CMMVAE package initialized")
+
+def log_method_decorator(logger: logging.Logger):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            logger.debug(f">{func.__name__}: {args} {kwargs}")
+            result = func(*args, **kwargs)
+            logger.debug(f"<{func.__name__}: {result}")
+            return result
+        return wrapper
+    return decorator
