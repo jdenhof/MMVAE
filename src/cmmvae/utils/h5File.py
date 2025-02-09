@@ -52,55 +52,23 @@ def get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Da
         logger.debug(f"Key could not be found: {e}")
 
 @log_method
-def get_data(group: h5py.Group):
-    return get_dataset(group, RK.DATA)
-
-@log_method
-def create_data(group: h5py.Group, *args, **kwargs):
-    return group.create_dataset(RK.DATA, *args, **kwargs)
-
-@log_method
-def get_metadata(group: h5py.Group):
-    return get_group(group, RK.METADATA)
-
-@log_method
-def create_metadata(group: h5py.Group, *args, **kwargs):
-    return group.create_group(RK.METADATA, *args, **kwargs)
-
-@log_method
-def get_umap_embeddings(group: h5py.Group):
-    return get_dataset(group, RK.UMAP_EMBEDDINGS)
-
-@log_method
-def create_umap_embeddings(group: h5py.Group, *args, **kwargs):
-    return group.create_dataset(RK.UMAP_EMBEDDINGS, *args, **kwargs)
-
-@log_method
 def as_dataframe(metadata: Optional[h5py.Group]):
     if metadata is not None:
         return pd.DataFrame(
-            {col: get_dataset(metadata, col) for col in metadata.keys()}
+            {col: _get_dataset(metadata, col) for col in metadata.keys()}
         )
 
 @log_method
-def load(file_path: str, key: str):
+def load(file_path: str, key: str, data: bool = True, metadata: bool = True, embeddings: bool = True):
     logger.debug(f"Loading h5py: {key} - {file_path}")
     with h5py.File(file_path, swmr=True) as h5file:
         group = _get_group(h5file, key)
-        logger.debug(f"Group: {group}")
-        data = get_data(group)
-        metadata = get_metadata(group)
-        embeddings = get_umap_embeddings(group)
-        if data is not None:
-            data = data[:]
-        if metadata is not None:
-            metadata = as_dataframe(metadata)
-        if embeddings is not None:
-            embeddings = embeddings[:]
         return {
-            RK.DATA: data,
-            RK.METADATA: metadata,
-            RK.UMAP_EMBEDDINGS: embeddings
+            RK.DATA: _get_dataset(group, RK.DATA)[:] if data else None,
+            RK.METADATA: as_dataframe(_get_group(group, RK.METADATA)) if metadata else None,
+            RK.UMAP_EMBEDDINGS: _get_dataset(group, RK.UMAP_EMBEDDINGS)[:] \
+                if get_dataset(group, RK.UMAP_EMBEDDINGS) is not None else None
+                if embeddings else None
         }
 
 @log_method
@@ -108,10 +76,10 @@ def write(file_path: str, data: np.ndarray, metadata: pd.DataFrame, key: str):
     with h5py.File(file_path, 'a', swmr=True) as h5file:
         group = get_group(h5file, key) or h5file.create_group(key)
         _append_data(
-            ds=get_data(group) or create_data(group),
+            ds=get_dataset(group, RK.DATA) or group.create_dataset(RK.DATA, chunks=True),
             data=data)
         _append_metadata(
-            group=get_metadata(group) or create_metadata(group),
+            group=get_group(group, RK.METADATA) or group.create_group(RK.METADATA),
             metadata=metadata)
 
 @log_method
