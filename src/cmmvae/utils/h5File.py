@@ -39,26 +39,32 @@ def get_dataset(obj: Union[h5py.File, h5py.Group], key: str) -> Optional[h5py.Da
 
 
 def get_data(group: h5py.Group):
+    logger.debug(f"get_data: {group}")
     return get_dataset(group, RK.DATA)
 
 
 def create_data(group: h5py.Group, *args, **kwargs):
+    logger.debug(f"create_data: {group}")
     return group.create_dataset(RK.DATA, *args, **kwargs)
 
 
 def get_metadata(group: h5py.Group):
+    logger.debug(f"get_metadata: {group}")
     return get_group(group, RK.METADATA)
 
 
 def create_metadata(group: h5py.Group, *args, **kwargs):
+    logger.debug(f"create_metadata: {group}")
     return group.create_group(RK.METADATA, *args, **kwargs)
 
 
 def get_umap_embeddings(group: h5py.Group):
+    logger.debug(f"get_umap_embeddings: {group}")
     return get_dataset(group, RK.UMAP_EMBEDDINGS)
 
 
 def create_umap_embeddings(group: h5py.Group, *args, **kwargs):
+    logger.debug(f"create_umap_embeddings: {group}")
     return group.create_dataset(RK.UMAP_EMBEDDINGS, *args, **kwargs)
 
 
@@ -73,6 +79,7 @@ def load(file_path: str, key: str):
     logger.debug(f"Loading h5py: {key} - {file_path}")
     with h5py.File(file_path) as h5file:
         group = _get_group(h5file, key)
+        logger.debug(f"Group: {group}")
         return {
             RK.DATA: get_data(group),
             RK.METADATA: as_dataframe(get_metadata(group)),
