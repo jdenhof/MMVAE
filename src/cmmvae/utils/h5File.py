@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import h5py
 from cmmvae.constants import REGISTRY_KEYS as RK
+
+
 logger = logging.getLogger(__name__)
 
 def log_method_decorator(logger: logging.Logger):
