@@ -126,11 +126,13 @@ def plot_umap_h5(
 
     image_paths = []
     for key in keys:
-        data, metadata, embeddings = h5File.load(hdf5_filepath, key)
-
+        prediction = h5File.load(hdf5_filepath, key)
+        data = prediction[RK.DATA]
+        metadata = prediction[RK.METADATA]
+        embeddings = prediction[RK.UMAP_EMBEDDINGS]
         if embeddings is None:
             embeddings = umap_embeddings(data)
-            h5File.create_umap_embeddings
+            h5File.save_embeddings(hdf5_filepath, key, embeddings)
             with h5py.File(hdf5_filepath, "a") as h5file:
                 ds = h5file.get(key)
 

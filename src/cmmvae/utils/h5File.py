@@ -82,6 +82,11 @@ def write(file_path: str, data: np.ndarray, metadata: pd.DataFrame, key: str):
             group=get_group(group, RK.METADATA) or group.create_group(RK.METADATA),
             metadata=metadata)
 
+def save_embeddings(file_path: str, key: str, embeddings: np.ndarray):
+    with h5py.File(file_path, 'a', swmr=True) as h5file:
+        group = get_group(h5file, key) or h5file.create_group(key)
+        group.create_dataset(RK.UMAP_EMBEDDINGS, data=embeddings)
+
 @log_method
 def _append_data(ds: h5py.Dataset, data: np.ndarray):
     new_size = ds.shape[0] + data.shape[0]

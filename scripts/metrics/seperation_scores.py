@@ -90,7 +90,9 @@ def compute(
     columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean"
 ):
+    print("Computing GroupedIndexLookup...")
     lookup = GroupedIndexLookup(df, columns=columns)
+    print("Computing scores...")
     return _compute_scores(data, lookup, metric=metric)
 
 
@@ -122,7 +124,7 @@ def main(
     """
     for key in keys:
         prediction = h5File.load(file_path, key, embeddings=False)
-        logger.debug(f"Loaded: {prediction}")
+        print("Loaded:", prediction)
         results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
         pd.DataFrame(results["group"]).to_csv(f"{key}_group_{output_path}")
         pd.DataFrame(results["total"]).to_csv(f"{key}_total_{output_path}")
