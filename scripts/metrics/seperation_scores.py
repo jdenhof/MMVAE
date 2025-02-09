@@ -2,6 +2,7 @@ import argparse
 from typing import Literal, Union
 import numpy as np
 import pandas as pd
+import tqdm
 
 from cmmvae.data.local.grouped_index_lookup import GroupedIndexLookup
 from cmmvae.utils import h5File
@@ -69,7 +70,9 @@ def _compute_scores(
 ):
     logger.debug(f"Computing scores for: {data}")
     scores = {col: {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")} for col in lookup.columns}
-    for group in lookup.get_groups():
+    total_scores = {m: 0 for m in ("intra_A", "intra_B", "inter_AB", "separation_score")}
+    for group in tqdm.tqdm(lookup.get_groups(), desc="Computing scores"):
+        tqdm.tqdm.write(f"Running total scores: {total_scores}")
         logger.debug(f"computing scores for group {group}")
         indicesA, indicesB = group.data
         dataA = data[indicesA]
