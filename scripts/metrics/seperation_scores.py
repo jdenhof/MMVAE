@@ -121,7 +121,7 @@ def main(
     We then do the same vice versa where the Input becomes Target and Target and Known become the Input.
     """
     for key in keys:
-        prediction = h5File.load(file_path, key)
+        prediction = h5File.load(file_path, key, embeddings=False)
         logger.debug(f"Loaded: {prediction}")
         results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
         pd.DataFrame(results["group"]).to_csv(f"{key}_group_{output_path}")
