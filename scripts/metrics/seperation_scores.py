@@ -80,7 +80,7 @@ def _compute_scores(
     for i, group in enumerate(groups):
         if pbar is not None and i % 100 == 0:
             pbar.set_postfix({
-                "Score": df.sum(axis=1)
+                "Score": df["seperation_score"].mean()
             })
         score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
         df.loc[len(df)] = [score[m] for m in metrics] + [group.varying_column, group.row_key]
