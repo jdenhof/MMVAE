@@ -83,18 +83,21 @@ def as_dataframe(metadata: Optional[h5py.Group]):
 @log_method
 def load(file_path: str, key: str):
     logger.debug(f"Loading h5py: {key} - {file_path}")
-    with h5py.File(file_path) as h5file:
+    with h5py.File(file_path, swmr=True) as h5file:
         group = _get_group(h5file, key)
         logger.debug(f"Group: {group}")
+        data = get_data(group) or []
+        metadata = get_metadata(group)
+        embeddings = get_umap_embeddings(group) or []
         return {
-            RK.DATA: get_data(group),
-            RK.METADATA: as_dataframe(get_metadata(group)),
-            RK.UMAP_EMBEDDINGS: get_umap_embeddings(group)
+            RK.DATA: data[:] or None,
+            RK.METADATA: as_dataframe(metadata),
+            RK.UMAP_EMBEDDINGS: embeddings[:] or None
         }
 
 @log_method
 def write(file_path: str, data: np.ndarray, metadata: pd.DataFrame, key: str):
-    with h5py.File(file_path, 'a') as h5file:
+    with h5py.File(file_path, 'a', swmr=True) as h5file:
         group = get_group(h5file, key) or h5file.create_group(key)
         _append_data(
             ds=get_data(group) or create_data(group),
