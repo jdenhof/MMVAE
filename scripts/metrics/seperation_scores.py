@@ -76,11 +76,12 @@ def _compute_scores(
     logger.debug("computing score...")
     with tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") as pbar:
         for i, group in enumerate(groups):
-            pbar.set_postfix_str(f"Running total scores: {total_scores}")
+            if i % 10 == 0:
+                pbar.set_postfix_str(f"Running total scores: {total_scores}")
             score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
             for m in scores[group.varying_column]:
                 scores[group.varying_column][m] += score[m]
-            pbar.update(1)
+            pbar.update()
     result = {m: sum(group[m] for group in scores.values()) for m in scores[next(iter(scores))]}
     return {
         "metric": metric,
