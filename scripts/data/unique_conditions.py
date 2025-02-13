@@ -31,4 +31,4 @@ if __name__ == "__main__":
 
     df = load_dataframe_from_directory(args.directory_path)
     with open("unique_condtions.json", "w") as f:
-        json.dump({c: pd.unique(df[c]) for c in args.columns }, f)
+        json.dump({c: pd.unique(df[c]).to_list() for c in args.columns }, f)
