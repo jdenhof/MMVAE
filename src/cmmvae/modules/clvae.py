@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Optional, overload
 
 import torch
+from torch.distributions import Normal
 import pandas as pd
 
 from cmmvae.modules.vae import VAE
@@ -49,11 +50,10 @@ class CLVAE(VAE):
             )
         else:
             import warnings
+            warnings.warn("No conditionals found for CLVAE")
 
-            warnings.warn("No conditionals found for vae")
-
-        if selection_order and selection_order[0] == "parallel":
-            if not concat_config:
+        if conditionals_module and selection_order and selection_order[0] == "parallel":
+            if not concat_config or conditional_config is None:
                 raise RuntimeError(
                     "Please define concat_config when selection_order = parallel"
                 )
@@ -61,30 +61,23 @@ class CLVAE(VAE):
                 len(conditionals_module.selection_order) * conditional_config.layers[-1]
             )
 
-            decoder_config.layers = [concat_dim] + decoder_config.layers
-            decoder_config.activation_fn = [
-                concat_config.activation_fn
-            ] + decoder_config.activation_fn
-            decoder_config.dropout_rate = [
-                concat_config.dropout_rate
-            ] + decoder_config.dropout_rate
-            decoder_config.return_hidden = [
-                concat_config.return_hidden
-            ] + decoder_config.return_hidden
-            decoder_config.use_layer_norm = [
-                concat_config.use_layer_norm
-            ] + decoder_config.use_layer_norm
-            decoder_config.use_batch_norm = [
-                concat_config.use_batch_norm
-            ] + decoder_config.use_batch_norm
+            decoder_config.layers.insert(0, concat_dim)
+            for attr in ['activation_fn', 'dropout_rate', 'return_hidden', 'use_layer_norm', 'use_batch_norm']:
+                setattr(decoder_config, attr, getattr(concat_config, attr) + getattr(decoder_config, attr))
 
         super().__init__(
             encoder_config=encoder_config,
             decoder_config=decoder_config,
             **encoder_kwargs,
         )
-
         self.conditionals = conditionals_module
+
+    def forward(self, x: torch.Tensor, metadata: pd.DataFrame, target_metadata: pd.DataFrame, **kwargs):
+        qz, z, hidden_representations = self.encode(x, **kwargs)
+        pz = Normal(torch.zeros_like(z), torch.ones_like(z))
+        z = self.after_reparameterize(z, target_metadata, **kwargs)
+        xhat = self.decode(z, **kwargs)
+        return qz, pz, z, xhat, hidden_representations
 
     def after_reparameterize(
         self, z: torch.Tensor, metadata: pd.DataFrame, **kwargs

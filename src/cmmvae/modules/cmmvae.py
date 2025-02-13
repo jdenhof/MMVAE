@@ -59,6 +59,7 @@ class CMMVAE(nn.Module):
         self,
         x: torch.Tensor,
         metadata: pd.DataFrame,
+        target_metadata: pd.DataFrame,
         expert_id: str,
         cross_generate: bool = False,
     ):
@@ -93,7 +94,7 @@ class CMMVAE(nn.Module):
 
         # Pass through the VAE
         qz, pz, z, shared_xhat, hidden_representations = self.vae(
-            shared_x, metadata, species=expert_id
+            shared_x, metadata, target_metadata, species=expert_id
         )
 
         xhats = {}

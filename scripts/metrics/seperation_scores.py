@@ -68,24 +68,26 @@ def _compute_scores(
     lookup: GroupedIndexLookup,
     metric: SIMULARITY_METRIC,
     progress_bar: bool = True,
-):
+) -> pd.DataFrame:
+    """Compute separation scores for each group in the lookup."""
     metrics = ("intra_A", "intra_B", "inter_AB", "separation_score")
     columns = metrics + ("varying_column", "row_key")
     df = pd.DataFrame(columns=columns)
     groups = list(lookup.get_groups())
     total_groups = len(groups)
     pbar = tqdm.tqdm(total=total_groups, desc="Computing scores", unit="group") if progress_bar else None
+
+    scores = []
     for i, group in enumerate(groups):
-        if pbar is not None and i % 100 == 0:
-            pbar.set_postfix({
-                "Score": df["separation_score"].mean()
-            })
         score = separation_score(data[group.data[0]], data[group.data[1]], metric=metric)
-        df.loc[len(df)] = [score[m] for m in metrics] + [group.varying_column, group.row_key]
+        scores.append([score[m] for m in metrics] + [group.varying_column, group.row_key])
         if pbar is not None:
             pbar.update()
+
     if pbar is not None:
         pbar.close()
+
+    df = pd.DataFrame(scores, columns=columns)
     return df
 
 def compute(
@@ -128,7 +130,7 @@ def main(
     """
     for key in keys:
         prediction = h5File.load(file_path, key, embeddings=False)
-        logger.debug("Loaded:", prediction)
+        logger.debug("loaded:", prediction)
         results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
         results.to_csv(output_path)
 

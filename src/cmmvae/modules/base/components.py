@@ -167,11 +167,11 @@ class ConcatBlockConfig(FCBlockConfig):
         return_hidden: bool = False,
         activation_fn: Optional[Type[nn.Module]] = None,
     ):
-        self.dropout_rate = dropout_rate
-        self.use_batch_norm = use_batch_norm
-        self.use_layer_norm = use_layer_norm
-        self.return_hidden = return_hidden
-        self.activation_fn = activation_fn
+        self.dropout_rate = [dropout_rate]
+        self.use_batch_norm = [use_batch_norm]
+        self.use_layer_norm = [use_layer_norm]
+        self.return_hidden = [return_hidden]
+        self.activation_fn = [activation_fn]
 
 
 class FCBlock(nn.Module):
@@ -500,13 +500,13 @@ class ConditionalLayers(nn.Module):
         self.shared_conditionals = list(conditional_paths["shared"].keys())
 
         self.shuffle_selection_order = False
-        self.is_parallel = selection_order[0] == "parallel"
+        self.is_parallel = selection_order and selection_order[0] == "parallel"
         if not selection_order or self.is_parallel:
             selection_order = conditionals
             self.shuffle_selection_order = True
 
         # Add all shared conditional layers
-        layer_dict = {
+        layer_dict: dict[str, nn.Module] = {
             batch_key: ConditionalLayer(
                 batch_key,
                 conditional_paths["shared"][batch_key],
@@ -829,7 +829,6 @@ class GradientReversalFunction(torch.autograd.Function):
         return x.view_as(x)
 
     @staticmethod
-    def backward(ctx, grad_output):
-        output = grad_output.neg() * ctx.alpha
-
-        return output, None
+    def backward(ctx, *grad_outputs):
+        outputs = [grad.neg()*ctx.alpha for grad in grad_outputs]
+        return tuple(outputs), None

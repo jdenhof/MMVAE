@@ -59,7 +59,7 @@ class BaseVAE(nn.Module):
         return xhat
 
     def after_reparameterize(
-        self, z: torch.Tensor, metadata: pd.DataFrame, **kwargs
+        self, z: torch.Tensor, metadata: pd.DataFrame, *args, **kwargs
     ) -> torch.Tensor:
         """
         Optional processing after reparameterization.

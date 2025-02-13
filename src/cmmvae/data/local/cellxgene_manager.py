@@ -1,5 +1,5 @@
 from typing import Union
-
+from torch.utils.data import DataLoader
 from cmmvae.data.local.cellxgene_datapipe import SpeciesDataPipe
 
 
@@ -158,3 +158,36 @@ class SpeciesManager:
             return_dense=self.return_dense,
             transform_fn=self.transform_fn(),
         )
+
+    def create_dataloader(self, dp: SpeciesDataPipe, **kwargs):
+        """
+        Creates a DataLoader for the given species data pipelines.
+
+        Args:
+            species (cmmvae.data.local.SpeciesDataPipe): Data pipelines for the species.
+            **kwargs: Additional keyword arguments for the DataLoader.
+
+        Returns:
+            DataLoader or MultiModalDataLoader: A DataLoader if a single species pipeline is provided,
+            otherwise a MultiModalDataLoader for multiple species.
+        """
+        return DataLoader(
+                dataset=dp,
+                batch_size=None,
+                shuffle=False,
+                collate_fn=lambda x: x,
+                persistent_workers=False,
+                **kwargs
+            )
+
+    def create_train_dataloader(self, **kwargs):
+        return self.create_dataloader(self.train_datapipe(), **kwargs)
+
+    def create_test_dataloader(self, **kwargs):
+        return self.create_dataloader(self.test_datapipe(), **kwargs)
+
+    def create_val_dataloader(self, **kwargs):
+        return self.create_dataloader(self.val_datapipe(), **kwargs)
+
+    def create_predict_dataloader(self, **kwargs):
+        return self.create_dataloader(self.predict_datapipe(), **kwargs)
