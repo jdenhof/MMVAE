@@ -7,7 +7,7 @@ from torch.autograd import Function
 import torch.optim as optim
 
 import pandas as pd
-import cmmvae
+import cmmvae.data.local
 
 # --- Gradient Reversal Layer ---
 class GradReverse(Function):
@@ -178,9 +178,6 @@ def train(directory: str = ""):
     latent_dim = 128
     decoder_dims = [1024, 2048]
 
-    def get_condtional_out_dim(column: str):
-        size = len(unique_conditions[column])
-        return
     conditional_out_dim = lambda size: 64 if size > 64 else 32 if size > 32 else 16
     conditional_configs = {
         col: {
