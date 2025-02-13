@@ -7,7 +7,7 @@ from torch.autograd import Function
 import torch.optim as optim
 
 import pandas as pd
-import cmmvae.data.local as local
+import cmmvae
 
 # --- Gradient Reversal Layer ---
 class GradReverse(Function):
@@ -162,7 +162,7 @@ class Discriminator(nn.Module):
 
 # --- Training Loop ---
 def train(directory: str = ""):
-    loader = local.SpeciesManager(
+    loader = cmmvae.data.local.SpeciesManager(
         name="human",
         directory_path="/mnt/projects/debruinz_project/july2024_census_data/subset/",
         train_npz_masks="human_counts_.*.npz",
