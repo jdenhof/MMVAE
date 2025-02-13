@@ -158,6 +158,7 @@ class Discriminator(nn.Module):
 # --- Training Loop ---
 def train(directory: str = ""):
     import os
+    import json
     import pandas as pd
     from cmmvae.data.local import SpeciesManager
     loader = SpeciesManager(
@@ -167,7 +168,8 @@ def train(directory: str = ""):
         train_metadata_masks="human_metadata_.*.npz",
     ).create_train_dataloader()
 
-    stats = pd.read_csv(os.path.join(directory, "unique_conditions.csv"))
+    with open("unique_condtions.json", "r") as f:
+        unique_conditions = json.load(f)
 
     # Data and network dimensions.
     input_dim = 60530  # RNA-seq data: 60,000 features.
@@ -176,16 +178,14 @@ def train(directory: str = ""):
     decoder_dims = [1024, 2048]
 
     def get_condtional_out_dim(column: str):
-        size = len(stats[column])
-        if size > 64:
-            return 64
-        elif size > 32:
-            return 32
-        else:
-            return 16
+        size = len(unique_conditions[column])
+        return
+    conditional_out_dim = lambda size: 64 if size > 64 else 32 if size > 32 else 16
     conditional_configs = {
-        str(col): { 'values': stats[col].tolist(), 'out_dim': get_condtional_out_dim(col)}
-        for col in stats.columns
+        col: {
+            'values': unique_conditions[col],
+            'out_dim': conditional_out_dim(unique_conditions[col])
+        } for col in unique_conditions
     }
 
     # For adversarial feedback, create a discriminator for each metadata field.
