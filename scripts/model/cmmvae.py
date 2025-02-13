@@ -162,9 +162,9 @@ def train(directory: str = ""):
     from cmmvae.data.local import SpeciesManager
     loader = SpeciesManager(
         name="human",
-        directory_path="/mnt/project/debruinz_project/july2024_census_data/subset/",
-        train_npz_masks="human_counts_.*.npz"
-        train_metadata_masks="human_metadata_.*.npz"
+        directory_path="/mnt/projects/debruinz_project/july2024_census_data/subset/",
+        train_npz_masks="human_counts_.*.npz",
+        train_metadata_masks="human_metadata_.*.npz",
     ).create_train_dataloader()
 
     stats = pd.read_csv(os.path.join(directory, "unique_conditions.csv"))
