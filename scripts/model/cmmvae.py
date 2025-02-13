@@ -160,6 +160,7 @@ def train(directory: str = ""):
     import os
     import json
     import pandas as pd
+    import cmmvae
     from cmmvae.data.local import SpeciesManager
     loader = SpeciesManager(
         name="human",
