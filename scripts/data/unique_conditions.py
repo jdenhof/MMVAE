@@ -17,7 +17,7 @@ def load_dataframe_from_directory(directory_path):
     if dataframes:
         return pd.concat(dataframes, ignore_index=True)
     else:
-        return RuntimeError("Column not find dataframes")
+        raise RuntimeError("Column not find dataframes")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process a directory path.")
