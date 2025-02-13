@@ -1,8 +1,14 @@
+import os
+import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Function
 import torch.optim as optim
+
+import pandas as pd
+import cmmvae
+from cmmvae.data.local import SpeciesManager
 
 # --- Gradient Reversal Layer ---
 class GradReverse(Function):
@@ -157,11 +163,6 @@ class Discriminator(nn.Module):
 
 # --- Training Loop ---
 def train(directory: str = ""):
-    import os
-    import json
-    import pandas as pd
-    import cmmvae
-    from cmmvae.data.local import SpeciesManager
     loader = SpeciesManager(
         name="human",
         directory_path="/mnt/projects/debruinz_project/july2024_census_data/subset/",
