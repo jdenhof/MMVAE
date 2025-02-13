@@ -163,7 +163,8 @@ def train(directory: str = ""):
     loader = SpeciesManager(
         name="human",
         directory_path="/mnt/project/debruinz_project/july2024_census_data/subset/",
-        train_metadata_masks="*.npz"
+        train_npz_masks="human_counts_.*.npz"
+        train_metadata_masks="human_metadata_.*.npz"
     ).create_train_dataloader()
 
     stats = pd.read_csv(os.path.join(directory, "unique_conditions.csv"))
