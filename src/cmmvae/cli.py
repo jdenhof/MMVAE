@@ -46,6 +46,7 @@ class CMMVAECli(plcli.LightningCLI):
                 "enable_progress_bar": False,
             }
         super().__init__(**kwargs)
+        self.running_subcommands = kwargs.get("run", True)
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
