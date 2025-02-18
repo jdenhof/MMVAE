@@ -45,7 +45,7 @@ class CMMVAECli(plcli.LightningCLI):
                 "logger": {"class_path": "lightning.pytorch.loggers.TensorBoardLogger"},
                 "enable_progress_bar": False,
             }
-
+        self.subcommands["cross_gen_score"] = self.run_cross_gen_score
         super().__init__(**kwargs)
 
     def before_instantiate_classes(self) -> None:
@@ -114,16 +114,38 @@ class CMMVAECli(plcli.LightningCLI):
             "model.init_args.module.init_args.vae.init_args.conditionals_directory",
         )
 
+    def run(self):
+        # Check if a custom subcommand was invoked.
+        # (LightningCLI normally sets self.subcommand from the parsed args.)
+        if getattr(self, "func", None) is not None:
+            # Call our custom callback.
+            self.func(self)
+        else:
+            # Otherwise, use the default behavior (which handles fit/test/etc.)
+            super().run()
+
     def add_cross_gen_score_subcommand(self, parser: plcli.LightningArgumentParser):
-        subparser = parser.add_subcommand(
-            "cross_gen_score", self.run_cross_gen_score
-        )
+        # subparser = parser.add_subcommand(
+        #     "cross_gen_score", self.run_cross_gen_score
+        # )
+        subparsers_actions = [
+            action for action in parser._actions if isinstance(action,
+                                type(parser.add_subparsers()))
+        ]
+
+        if subparsers_actions:
+            # Get the first (and usually only) subparsers action
+            subparsers = subparsers_actions[0]
+        else:
+            subparsers = parser.add_subparsers(dest="subcommand", required=True)
+        custom_parser = subparsers.add_parser("custom", help="Run custom command")
         subparser.add_argument("--source", type=str, help="The file path of the source matrix")
         subparser.add_argument("--target", type=str, help="The file path of the target matrix (ie. predictions on xhat)")
         subparser.add_argument("--df", type=str, help="The file path of the source metadata")
         subparser.add_argument("--columns", nargs='+', type=str, help="The columns of variation")
         subparser.add_argument("--iterations", type=str, default=1000, help="Number of interations to run")
         subparser.add_argument("--metric", type=str, default="cosine", help="Metric: ('cosine'|'euclidean')")
+        custom_parser.set_defaults(func=self.run_cross_gen_score)
 
     def run_cross_gen_score(self, args):
         with open(args.source, "rb") as npz_file:
