@@ -1,9 +1,10 @@
-import argparse
 from typing import Literal, Union
+import argparse
+import pickle
+from cmmvae.models.cmmvae_model import CMMVAEModel
 import numpy as np
 import pandas as pd
-import random
-
+import scipy.sparse as sp
 from cmmvae.cli import CMMVAECli
 from cmmvae.data.local.grouped_index_lookup import GroupedIndexLookup
 from cmmvae.utils import h5File
@@ -14,27 +15,49 @@ logger = logging.getLogger("cmmvae.cross_generation_score")
 
 SIMULARITY_METRIC = Union[Literal["cosine"], Literal["euclidean"]]
 
-def compute(
-    data: np.ndarray,
-    df: pd.DataFrame,
-    columns: list[str],
-    metric: SIMULARITY_METRIC = "euclidean",
-    iterations: int = 1000
-) -> pd.DataFrame:
 
+def compute(
+    key: str,
+    model: CMMVAEModel,
+    source_file: str,
+    target_file: str,
+    df_file: str,
+    columns: list[str],
+    iterations: int,
+    metric: str = "cosine"
+):
+    with open(source_file, "rb") as npz_file:
+        source = sp.load_npz(npz_file)
+    with open(target_file, "rb") as npz_file:
+        target = h5File.load(npz_file, key, embeddings=False)
+    with open(df_file, "r") as metadata_file:
+        df = pickle.load(metadata_file)
+
+    model.cross_generation_score(
+        source = source,
+        target = target,
+        df = df,
+        columns = columns,
+        iteration = iterations,
+        metric = metric,
+    )
 
 def main(
-    file_path: str,
+    model: CMMVAEModel,
+    source_file: str,
+    target_file: str,
+    df_file: str,
+    iterations: int,
     keys: list[str],
     columns: list[str],
     metric: SIMULARITY_METRIC = "euclidean",
     output_path: str = "cross_generation_scores.csv"
 ):
     for key in keys:
-        prediction = h5File.load(file_path, key, embeddings=False)
-        logger.debug("loaded:", prediction)
-        results = compute(prediction[RK.DATA], prediction[RK.METADATA], columns, metric=metric)
-        results.to_csv(output_path)
+        results = compute(
+            key, model, source_file, target_file, df_file, columns, iterations, metric
+        )
+        results.to_csv(f"{key}_" + output_path)
 
 
 if __name__ == "__main__":
@@ -43,16 +66,17 @@ if __name__ == "__main__":
     parser.add_argument("--file_path", type=str,
                         help="File path for hdf5 predictions.")
     parser.add_argument("--keys", nargs='+', type=str,
-                        help="Keys for h5file for sampling ('x', 'xhat') or others")
+                        help="Keys for h5file for sampling ('z', 'xhat') or others")
     parser.add_argument("--columns", nargs='+', type=str, help="List of columns of variation.")
     parser.add_argument("--metric", type=str, choices=["cosine", "euclidean"], default="euclidean")
     parser.add_argument("--threshold", type=int, default=1,
                         help="Threshold to limit group size.")
     parser.add_argument("--output_path", type=str, default="seperation_scores.csv")
     args = parser.parse_args()
-    cli = CMMVAECli(run=False)
+    cli = CMMVAECli(run=False, args=args)
     main(
-        file_path=args.file_path,
+        model=cli.model,
+        source_file=args.file_path,
         keys=args.keys,
         columns=args.columns,
         metric=args.metric,
