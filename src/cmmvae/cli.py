@@ -138,6 +138,7 @@ class CMMVAECli(plcli.LightningCLI):
             subparsers = subparsers_actions[0]
         else:
             subparsers = parser.add_subparsers(dest="subcommand", required=True)
+
         custom_parser = subparsers.add_parser("custom", help="Run custom command")
         subparser.add_argument("--source", type=str, help="The file path of the source matrix")
         subparser.add_argument("--target", type=str, help="The file path of the target matrix (ie. predictions on xhat)")
