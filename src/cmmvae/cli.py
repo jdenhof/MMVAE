@@ -24,12 +24,14 @@ class CMMVAECli(plcli.LightningCLI):
 
     def __init__(
         self,
+        moniter = "val_loss",
         **kwargs
     ):
         """
         Handles loading trainer, model, and data modules from config file,
         while linking common arguments for ease of access.
         """
+        self.moniter = moniter
         if "parser_kwargs" not in kwargs:
             kwargs["parser_kwargs"] = {}
 
@@ -51,11 +53,6 @@ class CMMVAECli(plcli.LightningCLI):
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
             self.save_config_callback = None
-        if self.only_data:
-            if "model" in self.config:
-                del self.config["model"]
-            if "trainer" in self.config:
-                del self.config["trainer"]
 
     def add_arguments_to_parser(self, parser: plcli.LightningArgumentParser):
 
