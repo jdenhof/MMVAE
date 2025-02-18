@@ -45,8 +45,8 @@ class CMMVAECli(plcli.LightningCLI):
                 "logger": {"class_path": "lightning.pytorch.loggers.TensorBoardLogger"},
                 "enable_progress_bar": False,
             }
-        super().__init__(**kwargs)
         self.running_subcommands = kwargs.get("run", True)
+        super().__init__(**kwargs)
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
