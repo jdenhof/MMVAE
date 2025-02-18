@@ -63,8 +63,14 @@ def main(
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file_path", type=str,
+    parser.add_argument("--source_file", type=str,
                         help="File path for hdf5 predictions.")
+    parser.add_argument("--target_file", type=str,
+                        help="File path for hdf5 predictions.")
+    parser.add_argument("--df_file", type=str,
+                        help="File path for the source metadata")
+    parser.add_argument("--iterations", type=str,
+                        help="Number of iterations to run.")
     parser.add_argument("--keys", nargs='+', type=str,
                         help="Keys for h5file for sampling ('z', 'xhat') or others")
     parser.add_argument("--columns", nargs='+', type=str, help="List of columns of variation.")
@@ -76,7 +82,10 @@ if __name__ == "__main__":
     cli = CMMVAECli(run=False, args=args)
     main(
         model=cli.model,
-        source_file=args.file_path,
+        source_file=args.source_file,
+        target_file=args.target_file,
+        df_file=args.df_file,
+        iterations=args.iterations,
         keys=args.keys,
         columns=args.columns,
         metric=args.metric,
