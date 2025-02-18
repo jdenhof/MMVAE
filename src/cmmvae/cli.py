@@ -3,6 +3,8 @@
 """
 import os
 import shutil
+import pickle
+import scipy.sparse as sp
 
 from lightning.pytorch import cli as plcli
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
@@ -10,6 +12,8 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from cmmvae.callbacks import (
     PredictionWriter,
 )
+
+import cmmvae.utils
 
 
 class CMMVAECli(plcli.LightningCLI):
@@ -53,7 +57,9 @@ class CMMVAECli(plcli.LightningCLI):
             if "trainer" in self.config:
                 del self.config["trainer"]
 
-    def add_arguments_to_parser(self, parser):
+    def add_arguments_to_parser(self, parser: plcli.LightningArgumentParser):
+        self.add_cross_gen_score_subcommand(parser)
+
         # Add arguments for logging and ease of access
         parser.add_argument(
             "--default_root_dir", required=True, help="Default root directory"
@@ -106,6 +112,33 @@ class CMMVAECli(plcli.LightningCLI):
         parser.link_arguments(
             "data.init_args.conditionals_directory",
             "model.init_args.module.init_args.vae.init_args.conditionals_directory",
+        )
+
+    def add_cross_gen_score_subcommand(self, parser: plcli.LightningArgumentParser):
+        subparser = parser.add_subcommand(
+            "cross_gen_score", self.run_cross_gen_score
+        )
+        subparser.add_argument("--source", type=str, help="The file path of the source matrix")
+        subparser.add_argument("--target", type=str, help="The file path of the target matrix (ie. predictions on xhat)")
+        subparser.add_argument("--df", type=str, help="The file path of the source metadata")
+        subparser.add_argument("--columns", nargs='+', type=str, help="The columns of variation")
+        subparser.add_argument("--iterations", type=str, default=1000, help="Number of interations to run")
+        subparser.add_argument("--metric", type=str, default="cosine", help="Metric: ('cosine'|'euclidean')")
+
+    def run_cross_gen_score(self, args):
+        with open(args.source, "rb") as npz_file:
+            source = sp.load_npz(args.source)
+        with open(args.source, "rb") as npz_file:
+            target = sp.load_npz(args.target)
+        with open(args.df, "r") as metadata_file:
+            df = pickle.load(metadata_file)
+        self.model.cross_generation_score(
+            source = source,
+            target = target,
+            df = df,
+            columns = args.columns,
+            iteration = args.iterations,
+            metric = args.metric,
         )
 
     def before_fit(self):

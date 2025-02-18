@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import itertools
 import logging
 
+import numpy as np
 import pandas as pd
 logger = logging.getLogger(__name__)
 
@@ -119,3 +120,20 @@ class GroupedIndexLookup:
                         group_key=gkey,
                         row_key=rkey,
                     )
+
+    def get_random_1_contexts_change(self):
+        varying_column = np.random.choice(self.columns)
+        group_key = self.get_columns_not_in((varying_column,))
+        group = self.index_dicts[group_key]
+        row_key = np.random.choice(list(group.keys()))
+        indices = group[row_key]
+        sampleA_index = np.random.choice(indices)
+        df = self.df.iloc[indices]
+        sampleA = df.iloc[sampleA_index, :]
+        sampleB_index = np.random.choice(df.index[df[varying_column] != sampleA[varying_column]])
+        return GroupedIndexResult(
+            data=(sampleA_index, sampleB_index),
+            varying_column=varying_column,
+            group_key = group_key,
+            row_key = row_key,
+        )
