@@ -1,3 +1,4 @@
+import os
 import pickle
 import pandas as pd
 import torch
@@ -17,13 +18,14 @@ class CMMVAETrainer(pl.Trainer):
         self,
         key: str,
         source_file: str,
-        target_file: str,
         df_file: str,
         columns: list[str],
         iterations: int,
         metric: str = "cosine",
         n_buffer: int = 1000,
+        target_file: str = "cross_generate_stats.h5",
     ):
+        target_file = os.path.join(self.logger.root_dir, target_file)
         with open(source_file, "rb") as npz_file:
             source = sp.load_npz(npz_file)
 
