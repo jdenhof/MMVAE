@@ -34,7 +34,7 @@ class REGISTRY_KEYS_NT(NamedTuple):
     """Key for the target or optimal latent variable z*."""
     X: str = "x"
     """Key for the input data x."""
-    xhat: str = "xhat"
+    XHAT: str = "xhat"
     """Key for the reconstructed data \\hat{x}."""
     Y: str = "Y"
     """Key for the target or output data y."""

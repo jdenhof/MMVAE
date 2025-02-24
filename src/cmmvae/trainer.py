@@ -26,44 +26,60 @@ class CMMVAETrainer(pl.Trainer):
     ):
         with open(source_file, "rb") as npz_file:
             source = sp.load_npz(npz_file)
-        target = h5File.load_legacy(target_file, key, embeddings=False)
+
         with open(df_file, "r") as metadata_file:
             df = pickle.load(metadata_file)
 
         lookup = GroupedIndexLookup(df, columns=columns)
         self.model.eval()
         column_scores = { col: 0 for col in columns }
-        dbuffer = []
-        mbuffer = []
+        bf_data = []
+        bf_data_cg = []
+        bf_md = []
+        bf_md_cg = []
         for i in range(iterations):
             for column in columns:
                 result = lookup.get_random_1_contexts_change()
                 index_A, index_B = result.data
                 sampleA, metadataA = source[index_A], df[index_B]
                 sampleB, metadataB = source[index_B], df[index_B]
-                sampleAtoA = target[index_A]
-                sampleBtoB = target[index_B]
 
                 metadataAtoB = metadataB
                 metadataBtoA = metadataA
 
-                sampleAtoB = self.cross_generate(sampleA, metadataA, metadataB)
-                sampleBtoA = self.cross_generate(sampleB, metadataB, metadataA)
+                sampleAtoA = self.model.forward(sampleA, metadataA, metadataA)
+                sampleBtoB = self.model.forward(sampleB, metadataB, metadataB)
 
-                dbuffer.append(sampleAtoB)
-                dbuffer.append(sampleBtoA)
-                mbuffer.append(metadataAtoB)
-                mbuffer.append(metadataBtoA)
+                bf_data.append(sampleAtoA)
+                bf_data.append(sampleBtoB)
+                bf_md.append(metadataA)
+                bf_md.append(metadataB)
+
+                sampleAtoB = self.model.forward(sampleA, metadataA, metadataB)
+                sampleBtoA = self.model.forward(sampleB, metadataB, metadataA)
+
+                bf_data_cg.append(sampleAtoB)
+                bf_data_cg.append(sampleBtoA)
+                bf_md_cg.append(metadataAtoB)
+                bf_md_cg.append(metadataBtoA)
 
                 if metric == "cosine":
                     column_scores[column] += 0.5 * (r2_score(sampleAtoB, sampleBtoB) + r2_score(sampleBtoA, sampleAtoA))
                 else:
                     raise ValueError(f"Unsupported metric: {metric}")
 
-            if len(dbuffer) > n_buffer or len(mbuffer) > n_buffer:
-                data = torch.Tensor(dbuffer).item()
-                mdata = pd.concat(mbuffer)
-                h5File.save(target_file, key, "crossgen", data, mdata)
+            if any(len(d) > n_buffer for d in (bf_data, bf_data_cg, bf_md, bf_md_cg)):
+                for k, d, md in ((RK.XHAT, bf_data, bf_data_cg), (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg)):
+                    data = torch.Tensor(d).item()
+                    mdata = pd.concat(md)
+                    h5File.save(target_file, key, k, data, mdata)
+                    d.clear()
+                    md.clear()
+
+        for k, d, md in ((RK.XHAT, bf_data, bf_data_cg), (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg)):
+            data = torch.Tensor(d).item()
+            mdata = pd.concat(md)
+            h5File.save(target_file, key, k, data, mdata)
 
         for col in column_scores:
             column_scores[col] /= len(column_scores[col])
