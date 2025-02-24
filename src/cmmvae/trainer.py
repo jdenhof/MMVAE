@@ -34,10 +34,7 @@ class CMMVAETrainer(pl.Trainer):
         lookup = GroupedIndexLookup(df, columns=columns)
         self.model.eval()
         column_scores = {col: 0 for col in columns}
-        bf_data = []
-        bf_data_cg = []
-        bf_md = []
-        bf_md_cg = []
+        buffer = {"normal": [[],[]], "cross": [[],[]]}
         for i in range(iterations):
             for column in columns:
                 result = lookup.get_random_1_contexts_change()
@@ -51,18 +48,14 @@ class CMMVAETrainer(pl.Trainer):
                 sampleAtoA = self.model.cross_generate(sampleA, metadataA, metadataA)
                 sampleBtoB = self.model.cross_generate(sampleB, metadataB, metadataB)
 
-                bf_data.append(sampleAtoA)
-                bf_data.append(sampleBtoB)
-                bf_md.append(metadataA)
-                bf_md.append(metadataB)
+                buffer["normal"][0].extend((sampleAtoA, sampleBtoB))
+                buffer["normal"][1].extend((metadataA, metadataB))
 
                 sampleAtoB = self.model.cross_generate(sampleA, metadataA, metadataB)
                 sampleBtoA = self.model.cross_generate(sampleB, metadataB, metadataA)
 
-                bf_data_cg.append(sampleAtoB)
-                bf_data_cg.append(sampleBtoA)
-                bf_md_cg.append(metadataAtoB)
-                bf_md_cg.append(metadataBtoA)
+                buffer["cross"][0].extend((sampleAtoB, sampleBtoA))
+                buffer["cross"][1].extend((metadataAtoB, metadataBtoA))
 
                 if metric == "cosine":
                     column_scores[column] += 0.5 * (
@@ -72,25 +65,19 @@ class CMMVAETrainer(pl.Trainer):
                 else:
                     raise ValueError(f"Unsupported metric: {metric}")
 
-            if any(len(d) > n_buffer for d in (bf_data, bf_data_cg, bf_md, bf_md_cg)):
-                for k, d, md in (
-                    ("normal", bf_data, bf_data_cg),
-                    ("cross", bf_data_cg, bf_md_cg),
-                ):
-                    data = torch.Tensor(d).item()
-                    mdata = pd.concat(md)
-                    h5File.save(target_file, k, RK.XHAT, data, mdata)
-                    d.clear()
-                    md.clear()
+            if any(len(d[0]) > n_buffer or len(d[1]) > n_buffer for d in buffer.values()):
+                save_buffer(buffer, target_file)
 
-        for k, d, md in (
-            (RK.XHAT, bf_data, bf_data_cg),
-            (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg),
-        ):
-            data = torch.Tensor(d).item()
-            mdata = pd.concat(md)
-            h5File.save(target_file, key, k, data, mdata)
+        save_buffer(buffer, target_file)
 
         for col in column_scores:
             column_scores[col] /= len(column_scores[col])
         return column_scores
+
+def save_buffer(buffer file):
+    for key, buff in buffer.items():
+        data = torch.Tensor(buff[0]).item()
+        mdata = pd.concat(buff[1])
+        h5File.save(target_file, k, RK.XHAT, data, mdata)
+        buff[0].clear()
+        buff[1].clear()
