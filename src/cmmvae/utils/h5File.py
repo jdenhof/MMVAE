@@ -40,82 +40,59 @@ def as_dataframe(metadata: h5py.Group):
         {col: _get_dataset(metadata, col) for col in metadata.keys()}
     )
 
-@log_method_decorator(logger)
-def load(file_path: str, key: str, data: bool = True, metadata: bool = True, embeddings: bool = True):
+def load_legacy(file_path: str, key: str, data: bool = True, metadata: bool = True, embeddings: bool = True):
     with h5py.File(file_path, swmr=True) as h5file:
         logger.debug(f"h5file handler opened...")
         group = _get_group(h5file, key)
         logger.debug(f"found group for {key}...")
-        _data = get_dataset(group, RK.DATA) if data else None
-        if _data is not None:
-            logger.debug("splicing data...")
-            _data = _data[:]
-        _metadata = get_group(group, RK.METADATA) if metadata else None
-        if _metadata is not None:
-            logger.debug("converting metadata to dataframe...")
-            _metadata = as_dataframe(_metadata)
-        _embeddings = get_dataset(group, RK.UMAP_EMBEDDINGS) if embeddings else None
-        if embeddings and _embeddings is not None:
-            logger.debug("splicing umap_embeddings...")
-            _embeddings = _embeddings[:]
-        logger.debug(f"returning...{_data}, {_metadata}, {_embeddings}")
-        return {
-            RK.DATA: _data,
-            RK.METADATA: _metadata,
-            RK.UMAP_EMBEDDINGS: _embeddings
-        }
+        for key, value in group.items():
+            _data = get_dataset(group, RK.DATA) if data else None
+            if _data is not None:
+                logger.debug("splicing data...")
+                _data = _data[:]
+            _metadata = get_group(group, RK.METADATA) if metadata else None
+            if _metadata is not None:
+                logger.debug("converting metadata to dataframe...")
+                _metadata = as_dataframe(_metadata)
+            _embeddings = get_dataset(group, RK.UMAP_EMBEDDINGS) if embeddings else None
+            if embeddings and _embeddings is not None:
+                logger.debug("splicing umap_embeddings...")
+                _embeddings = _embeddings[:]
+            logger.debug(f"returning...{_data}, {_metadata}, {_embeddings}")
+            return {
+                RK.DATA: _data,
+                RK.METADATA: _metadata,
+                RK.UMAP_EMBEDDINGS: _embeddings
+            }
 
-def _write(
+def save(
     file_path: str,
+    gkey: str,
     key: str,
     data: Optional[np.ndarray] = None,
     metadata: Optional[pd.DataFrame] = None,
-    embeddings: Optional[np.ndarray] = None,
-    mode: str = 'w'
+    mode: str = 'a',
+    metadata_key: Optional[str] = None,
 ):
-    assert all(p is not None for p in (data, metadata, embeddings))
+    if all(p is None for p in (data, metadata)):
+        raise RuntimeError("Must pass either data or metadata to save that is not None!")
+
     with h5py.File(file_path, mode, swmr=True) as h5file:
-        group = get_group(h5file, key) or h5file.create_group(key)
-        if embeddings is not None:
-            _append_data(
-                ds=get_dataset(group, RK.UMAP_EMBEDDINGS) or group.create_dataset(RK.UMAP_EMBEDDINGS, chunks=True),
-                data=embeddings,
-                size=embeddings.shape[0]
-            )
+        group = get_group(h5file, gkey) or h5file.create_group(gkey)
+        group = get_group(group, key) or gkey.create_group(key)
         if data is not None:
-            _append_data(
+            _append(
                 ds=get_dataset(group, RK.DATA) or group.create_dataset(RK.DATA, chunks=True),
                 data=data,
                 size=data.shape[0])
         if metadata is not None:
-            _append_metadata(
-                group=get_group(group, RK.METADATA) or group.create_group(RK.METADATA),
-                metadata=metadata)
+            metadata_group=get_group(group, RK.METADATA) or group.create_group(RK.METADATA),
+            for col in metadata.columns:
+                column_ds = get_dataset(metadata_group, col) or metadata_group.create_dataset(col, chunks=True)
+                data = metadata[col].values.tolist()
+                _append(column_ds, data, len(data))
 
-def add_embeddings(file_path: str, key: str, embeddings: np.ndarray):
-    _write(file_path, key, embeddings=embeddings,mode='a')
-
-def append_batch(file_path: str, key: str, data: np.ndarray, metadata: pd.DataFrame):
-    _write(file_path, key, data=data, metadata=metadata, mode='a')
-
-def _append_data(ds: h5py.Dataset, data: Container, size: int):
+def _append(ds: h5py.Dataset, data: Container, size: int):
     new_size = ds.shape[0] + size
     ds.resize(new_size, axis=0)
     ds[-size :] = data
-
-def _append_metadata(group: h5py.Group, metadata: pd.DataFrame, strict: bool = True):
-    for col in metadata.columns:
-        if strict and col not in group:
-            raise RuntimeError(f"metadata column {col} not in h5File")
-        column_ds = get_dataset(group, col) or group.create_dataset(col, chunks=True)
-        data = _array_like_to_list(metadata[col].values)
-        _append_data(column_ds, data, len(data))
-
-def _array_like_to_list(array_like: ArrayLike):
-    if hasattr(array_like, "tolist"):
-        return array_like.tolist()
-    elif hasattr(array_like, "to_list"):
-        return array_like.to_list() # type: ignore
-    elif not isinstance(array_like, list):
-        raise TypeError("'column_data' must be of type list")
-    return array_like

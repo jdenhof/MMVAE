@@ -319,6 +319,7 @@ class CMMVAEModel(BaseModel):
         return embeddings
 
     def cross_generate(self, x, metadata, target_metdata):
+        x = torch.Tensor(x, device=self.device)
         _, _, _, xhats, _ = self.forward(
             x = x,
             metadata = metadata,
@@ -327,45 +328,6 @@ class CMMVAEModel(BaseModel):
             cross_generate = False,
         )
         return xhats["human"]
-
-    def cross_generation_score(
-        self,
-        source: np.ndarray,
-        target: np.ndarray,
-        df: pd.DataFrame,
-        columns: list[str],
-        iterations: int,
-        metric = "cosine"
-    ):
-        lookup = GroupedIndexLookup(df, columns=columns)
-        self.eval()
-        column_scores = { col: 0 for col in columns }
-        for i in range(iterations):
-            for column in columns:
-                result = lookup.get_random_1_contexts_change()
-                index_A, index_B = result.data
-                sampleA, metadataA = source[index_A], df[index_B]
-                sampleB, metadataB = source[index_B], df[index_B]
-                sampleAtoA = target[index_A]
-                sampleBtoB = target[index_B]
-                sampleAtoB = self.cross_generate(sampleA, metadataA, metadataB)
-                sampleBtoA = self.cross_generate(sampleB, metadataB, metadataA)
-
-                if metric == "cosine":
-                    column_scores[column] += 0.5 * (r2_score(sampleAtoB, sampleBtoB) + r2_score(sampleBtoA, sampleAtoA))
-                else:
-                    raise ValueError(f"Unsupported metric: {metric}")
-        for col in column_scores:
-            column_scores[col] /= len(column_scores[col])
-        return column_scores
-
-
-
-
-
-
-
-
 
     def get_optimizers(self, zero_all: bool = False):
         """

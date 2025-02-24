@@ -13,8 +13,10 @@ from cmmvae.callbacks import (
     PredictionWriter,
 )
 
-import cmmvae.utils
+from cmmvae.models import CMMVAEModel
+from cmmvae.trainer import CMMVAETrainer
 
+import cmmvae.utils
 
 class CMMVAECli(plcli.LightningCLI):
     """
@@ -24,31 +26,29 @@ class CMMVAECli(plcli.LightningCLI):
 
     def __init__(
         self,
-        moniter = "val_loss",
         **kwargs
     ):
         """
         Handles loading trainer, model, and data modules from config file,
         while linking common arguments for ease of access.
         """
-        self.moniter = moniter
-        if "parser_kwargs" not in kwargs:
-            kwargs["parser_kwargs"] = {}
+        kwargs.setdefault("trainer_defaults", self.get_trainer_defaults())
+        kwargs.setdefault("parser_kwargs", self.get_parser_kwargs())
 
-        kwargs["parser_kwargs"].update(
-            {
-                "default_env": True,
-                "parser_mode": "omegaconf",
-            }
+        super().__init__(
+            model_class=CMMVAEModel,
+            trainer_class=CMMVAETrainer,
+            **kwargs,
         )
 
-        if "trainer_defaults" not in kwargs:
-            kwargs["trainer_defaults"] = {
-                "logger": {"class_path": "lightning.pytorch.loggers.TensorBoardLogger"},
-                "enable_progress_bar": False,
-            }
-        self.running_subcommands = kwargs.get("run", True)
-        super().__init__(**kwargs)
+    def get_parser_kwargs(self):
+        return {"parser_mode": "omegaconf"}
+
+    def get_trainer_defaults(self):
+        return {
+            "logger": {"class_path": "lightning.pytorch.loggers.TensorBoardLogger"},
+            "enable_progress_bar": False,
+        }
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":

@@ -6,9 +6,12 @@
 from cmmvae.data.local.cellxgene_datamodule import SpeciesDataModule
 from cmmvae.data.local.cellxgene_manager import SpeciesManager
 from cmmvae.data.local.cellxgene_datapipe import SpeciesDataPipe
+from .grouped_index_lookup import GroupedIndexLookup, GroupedIndexResult
 
 
 __all__ = [
+    "GroupedIndexLookup",
+    "GroupedIndexResult",
     "SpeciesManager",
     "SpeciesDataModule",
     "SpeciesDataPipe",

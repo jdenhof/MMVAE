@@ -28,8 +28,7 @@ def compute(
 ):
     with open(source_file, "rb") as npz_file:
         source = sp.load_npz(npz_file)
-    with open(target_file, "rb") as npz_file:
-        target = h5File.load(npz_file, key, embeddings=False)
+    target = h5File.load_legacy(target_file, key, embeddings=False)
     with open(df_file, "r") as metadata_file:
         df = pickle.load(metadata_file)
 
