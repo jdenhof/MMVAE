@@ -16,7 +16,6 @@ class CMMVAETrainer(pl.Trainer):
     @torch.inference_mode()
     def cross_generate(
         self,
-        key: str,
         source_file: str,
         df_file: str,
         columns: list[str],
@@ -75,12 +74,12 @@ class CMMVAETrainer(pl.Trainer):
 
             if any(len(d) > n_buffer for d in (bf_data, bf_data_cg, bf_md, bf_md_cg)):
                 for k, d, md in (
-                    (RK.XHAT, bf_data, bf_data_cg),
-                    (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg),
+                    ("normal", bf_data, bf_data_cg),
+                    ("cross", bf_data_cg, bf_md_cg),
                 ):
                     data = torch.Tensor(d).item()
                     mdata = pd.concat(md)
-                    h5File.save(target_file, key, k, data, mdata)
+                    h5File.save(target_file, k, RK.XHAT, data, mdata)
                     d.clear()
                     md.clear()
 
