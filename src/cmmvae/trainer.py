@@ -11,8 +11,8 @@ from cmmvae.utils import h5File
 
 from cmmvae.constants import REGISTRY_KEYS as RK
 
-class CMMVAETrainer(pl.Trainer):
 
+class CMMVAETrainer(pl.Trainer):
     @torch.inference_mode()
     def cross_generate(
         self,
@@ -34,7 +34,7 @@ class CMMVAETrainer(pl.Trainer):
 
         lookup = GroupedIndexLookup(df, columns=columns)
         self.model.eval()
-        column_scores = { col: 0 for col in columns }
+        column_scores = {col: 0 for col in columns}
         bf_data = []
         bf_data_cg = []
         bf_md = []
@@ -49,16 +49,16 @@ class CMMVAETrainer(pl.Trainer):
                 metadataAtoB = metadataB
                 metadataBtoA = metadataA
 
-                sampleAtoA = self.model.forward(sampleA, metadataA, metadataA)
-                sampleBtoB = self.model.forward(sampleB, metadataB, metadataB)
+                sampleAtoA = self.model.cross_generate(sampleA, metadataA, metadataA)
+                sampleBtoB = self.model.cross_generate(sampleB, metadataB, metadataB)
 
                 bf_data.append(sampleAtoA)
                 bf_data.append(sampleBtoB)
                 bf_md.append(metadataA)
                 bf_md.append(metadataB)
 
-                sampleAtoB = self.model.forward(sampleA, metadataA, metadataB)
-                sampleBtoA = self.model.forward(sampleB, metadataB, metadataA)
+                sampleAtoB = self.model.cross_generate(sampleA, metadataA, metadataB)
+                sampleBtoA = self.model.cross_generate(sampleB, metadataB, metadataA)
 
                 bf_data_cg.append(sampleAtoB)
                 bf_data_cg.append(sampleBtoA)
@@ -66,19 +66,28 @@ class CMMVAETrainer(pl.Trainer):
                 bf_md_cg.append(metadataBtoA)
 
                 if metric == "cosine":
-                    column_scores[column] += 0.5 * (r2_score(sampleAtoB, sampleBtoB) + r2_score(sampleBtoA, sampleAtoA))
+                    column_scores[column] += 0.5 * (
+                        r2_score(sampleAtoB, sampleBtoB)
+                        + r2_score(sampleBtoA, sampleAtoA)
+                    )
                 else:
                     raise ValueError(f"Unsupported metric: {metric}")
 
             if any(len(d) > n_buffer for d in (bf_data, bf_data_cg, bf_md, bf_md_cg)):
-                for k, d, md in ((RK.XHAT, bf_data, bf_data_cg), (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg)):
+                for k, d, md in (
+                    (RK.XHAT, bf_data, bf_data_cg),
+                    (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg),
+                ):
                     data = torch.Tensor(d).item()
                     mdata = pd.concat(md)
                     h5File.save(target_file, key, k, data, mdata)
                     d.clear()
                     md.clear()
 
-        for k, d, md in ((RK.XHAT, bf_data, bf_data_cg), (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg)):
+        for k, d, md in (
+            (RK.XHAT, bf_data, bf_data_cg),
+            (f"{RK.XHAT}_cross", bf_data_cg, bf_md_cg),
+        ):
             data = torch.Tensor(d).item()
             mdata = pd.concat(md)
             h5File.save(target_file, key, k, data, mdata)
